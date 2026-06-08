@@ -58,6 +58,15 @@ function parseCalendarQueryDate() {
   return new Date(year, month - 1, day);
 }
 
+function assignmentStatusLabel(status?: string | null) {
+  if (status === "ASSIGNED") return "Назначен";
+  if (status === "IN_PROGRESS") return "В процессе";
+  if (status === "COMPLETED") return "Завершен";
+  if (status === "FAILED") return "Не пройден";
+  if (status === "OVERDUE") return "Просрочен";
+  return status;
+}
+
 function buildScheduleEvents(courses: AssignedCourseDto[]): ScheduleEvent[] {
   return courses.flatMap((course) => {
     if (!course.courseId) return [];
@@ -255,7 +264,7 @@ export default function CalendarPage() {
                             <Icon className="h-3 w-3" />
                             {meta.label}
                           </Badge>
-                          {event.status && <Badge variant="outline">{event.status}</Badge>}
+                          {event.status && <Badge variant="outline">{assignmentStatusLabel(event.status)}</Badge>}
                         </div>
                         <h4 className="font-semibold">{event.courseTitle}</h4>
                         <p className="mt-1 text-sm text-muted-foreground">{event.description}</p>
