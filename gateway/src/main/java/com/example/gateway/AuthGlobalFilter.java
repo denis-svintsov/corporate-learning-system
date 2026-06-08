@@ -33,6 +33,12 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
         }
 
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        if ((authHeader == null || authHeader.isBlank()) && path.equals("/notifications/stream")) {
+            String token = exchange.getRequest().getQueryParams().getFirst("token");
+            if (token != null && !token.isBlank()) {
+                authHeader = "Bearer " + token;
+            }
+        }
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();

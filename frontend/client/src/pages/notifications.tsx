@@ -23,6 +23,8 @@ function typeLabel(type: NotificationDto["type"]) {
   switch (type) {
     case "COURSE_ASSIGNED":
       return "Курс";
+    case "ASSIGNMENT_REQUESTED":
+      return "Заявка";
     case "LESSON_COMPLETED":
       return "Урок";
     case "COURSE_COMPLETED":
@@ -39,14 +41,14 @@ export default function NotificationsPage() {
   const notificationsQuery = useQuery({
     queryKey: ["notifications"],
     queryFn: fetchMyNotifications,
-    refetchInterval: 10000,
+    refetchInterval: 60000,
     refetchOnWindowFocus: true,
   });
 
   const unreadQuery = useQuery({
     queryKey: ["notifications-unread-count"],
     queryFn: fetchUnreadNotificationsCount,
-    refetchInterval: 10000,
+    refetchInterval: 60000,
     refetchOnWindowFocus: true,
   });
 

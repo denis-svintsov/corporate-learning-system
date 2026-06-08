@@ -1,6 +1,8 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { fetchAssignmentRequests } from "@/lib/coursesApi";
 import { 
   LayoutDashboard, 
   BookOpen, 
@@ -26,6 +28,25 @@ export function Sidebar() {
     ["ADMIN", "HR", "MANAGER", "TECHNOLOG"].includes(role),
   );
 
+  const { data: pendingAssignmentRequests = [] } = useQuery({
+    queryKey: ["assignment-requests-pending-count"],
+    queryFn: () => fetchAssignmentRequests("PENDING"),
+    enabled: canModerate,
+    refetchInterval: 60000,
+    refetchOnWindowFocus: true,
+  });
+
+  const pendingAssignmentCount = pendingAssignmentRequests.length;
+
+  const renderBadge = (count?: number) => {
+    if (!count) return null;
+    return (
+      <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold leading-none text-destructive-foreground">
+        {count > 9 ? "9+" : count}
+      </span>
+    );
+  };
+
   const menuItems = [
     { icon: LayoutDashboard, label: "Дашборд", href: "/" },
     { icon: BookOpen, label: "Назначенные курсы", href: "/catalog" },
@@ -36,7 +57,7 @@ export function Sidebar() {
   ];
 
   const adminItems = [
-    { icon: Settings, label: "Заявки и лимиты", href: "/admin" },
+    { icon: Settings, label: "Заявки и лимиты", href: "/admin", badge: pendingAssignmentCount },
   ];
 
   const courseAdminItems = [
@@ -53,10 +74,10 @@ export function Sidebar() {
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
-      <div className="flex h-16 items-center border-b px-6">
-        <div className="flex items-center gap-2 font-bold text-xl text-primary">
-          <Building2 className="h-6 w-6" />
-          <span className="truncate">Платформа обучения</span>
+      <div className="flex h-16 items-center border-b px-4">
+        <div className="flex min-w-0 items-center gap-2 font-bold text-lg text-primary">
+          <Building2 className="h-5 w-5 shrink-0" />
+          <span className="truncate">Обучение</span>
         </div>
       </div>
 
@@ -94,7 +115,8 @@ export function Sidebar() {
                     )}
                   >
                     <item.icon className="h-4 w-4" />
-                    {item.label}
+                    <span className="truncate">{item.label}</span>
+                    {renderBadge(item.badge)}
                   </a>
                 </Link>
               ))}

@@ -75,6 +75,7 @@ services:
       - "5000:5000"
     environment:
       DATABASE_URL: postgresql://sdo_user:sdo_password@postgres:5432/sdo_users_db
+      GATEWAY_URL: http://gateway:8080
       NODE_ENV: development
       PORT: 5000
     depends_on:

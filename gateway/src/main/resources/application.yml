@@ -56,6 +56,12 @@ spring:
           uri: ${COMMUNICATION_SERVICE_URL:http://communication:8080}
           predicates:
             - Path=/chat/**,/ws/chat/**
+        - id: notification-stream
+          uri: ${NOTIFICATION_SERVICE_URL:http://notifications:8080}
+          predicates:
+            - Path=/notifications/stream
+          metadata:
+            response-timeout: -1
         - id: notification-service
           uri: ${NOTIFICATION_SERVICE_URL:http://notifications:8080}
           predicates:

@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS auth.users (
     password VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     first_name VARCHAR(255),
+    middle_name VARCHAR(255),
     last_name VARCHAR(255),
     position_id VARCHAR(255),
     department_id VARCHAR(255),

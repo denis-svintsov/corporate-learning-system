@@ -109,11 +109,22 @@ public class CoursesController {
                                          @RequestParam(required = false) CourseStatus status,
                                          @RequestParam(defaultValue = "0") int page,
                                          @RequestParam(defaultValue = "100") int size,
+                                         @RequestHeader(name = "X-User-Id", required = false) String userId,
                                          @RequestHeader(name = "X-User-Roles", required = false) String rolesHeader) {
         Set<String> roles = SecurityHeaders.parseRoles(rolesHeader);
         requireAnyRole(roles, "ADMIN", "HR", "TECHNOLOG", "EXPERT");
         Pageable pageable = PageRequest.of(page, Math.min(size, 200));
-        return courseService.catalogDto(q, null, difficulty, status, null, null, pageable);
+        Page<CourseDto> result = courseService.catalogDto(q, null, difficulty, status, null, null, pageable);
+        if (!roles.contains("EXPERT") || SecurityHeaders.hasAnyRole(roles, "ADMIN", "HR", "TECHNOLOG")) {
+            return result;
+        }
+        if (userId == null || userId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing X-User-Id");
+        }
+        List<CourseDto> filtered = result.getContent().stream()
+                .filter(course -> course.expertIds().contains(userId))
+                .toList();
+        return new PageImpl<>(filtered, pageable, filtered.size());
     }
 
     @GetMapping("/{id}")
@@ -169,9 +180,10 @@ public class CoursesController {
     @GetMapping("/{id}/participants")
     public List<CourseParticipantDto> participants(
             @PathVariable String id,
+            @RequestHeader(name = "X-User-Id", required = false) String userId,
             @RequestHeader(name = "X-User-Roles", required = false) String rolesHeader
     ) {
-        requireAnyRole(SecurityHeaders.parseRoles(rolesHeader), "ADMIN", "HR", "TECHNOLOG", "EXPERT");
+        requireCourseLeader(id, userId, SecurityHeaders.parseRoles(rolesHeader));
         return courseAttendanceService.participants(id);
     }
 
@@ -179,9 +191,10 @@ public class CoursesController {
     public List<AttendanceDto> attendance(
             @PathVariable String id,
             @RequestParam(required = false) LocalDate date,
+            @RequestHeader(name = "X-User-Id", required = false) String userId,
             @RequestHeader(name = "X-User-Roles", required = false) String rolesHeader
     ) {
-        requireAnyRole(SecurityHeaders.parseRoles(rolesHeader), "ADMIN", "HR", "TECHNOLOG", "EXPERT");
+        requireCourseLeader(id, userId, SecurityHeaders.parseRoles(rolesHeader));
         return courseAttendanceService.attendance(id, date);
     }
 
@@ -192,7 +205,7 @@ public class CoursesController {
             @RequestHeader(name = "X-User-Id", required = false) String userId,
             @RequestHeader(name = "X-User-Roles", required = false) String rolesHeader
     ) {
-        requireAnyRole(SecurityHeaders.parseRoles(rolesHeader), "ADMIN", "HR", "TECHNOLOG", "EXPERT");
+        requireCourseLeader(id, userId, SecurityHeaders.parseRoles(rolesHeader));
         if (userId == null || userId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing X-User-Id");
         }
@@ -201,6 +214,22 @@ public class CoursesController {
 
     private void requireCourseEditor(Set<String> roles) {
         requireAnyRole(roles, "ADMIN", "TECHNOLOG");
+    }
+
+    private void requireCourseLeader(String courseId, String userId, Set<String> roles) {
+        if (SecurityHeaders.hasAnyRole(roles, "ADMIN", "HR", "TECHNOLOG")) {
+            return;
+        }
+        if (!roles.contains("EXPERT")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        if (userId == null || userId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing X-User-Id");
+        }
+        CourseDto course = courseService.getDtoById(courseId);
+        if (!course.expertIds().contains(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Expert is not assigned to this course");
+        }
     }
 
     private void requireAnyRole(Set<String> roles, String... allowedRoles) {

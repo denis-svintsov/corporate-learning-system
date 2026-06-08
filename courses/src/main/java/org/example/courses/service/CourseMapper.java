@@ -28,6 +28,7 @@ public class CourseMapper {
                 CsvUtil.splitToSet(course.getAllowedRolesCsv()),
                 CsvUtil.splitToSet(course.getAllowedDepartmentIdsCsv()),
                 CsvUtil.splitToSet(course.getSpecializationsCsv()),
+                CsvUtil.splitToSet(course.getExpertIdsCsv()),
                 course.getInstructions(),
                 course.getAggregatorUrl(),
                 course.getCoverUrl(),

@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { fetchUserProfile } from "@/lib/usersApi";
+import { formatFullName } from "@/lib/userName";
 import { CabinetNav } from "@/components/cabinet/CabinetNav";
 
 export default function CabinetProfilePage() {
@@ -30,7 +31,7 @@ export default function CabinetProfilePage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <div className="text-xs text-muted-foreground">ФИО</div>
-                  <div className="font-medium">{profile.lastName} {profile.firstName}</div>
+                  <div className="font-medium">{formatFullName(profile)}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground">Email</div>

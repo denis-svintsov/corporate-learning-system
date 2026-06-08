@@ -10,6 +10,9 @@ public record CourseParticipantDto(
         String assignmentId,
         AssignmentStatus assignmentStatus,
         LocalDate dueDate,
-        OffsetDateTime assignedAt
+        OffsetDateTime assignedAt,
+        long presentDays,
+        long totalCourseDays,
+        int attendancePercentage
 ) {
 }

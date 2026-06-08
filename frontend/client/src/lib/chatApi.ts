@@ -29,7 +29,7 @@ export interface ChatParticipantDto {
   online: boolean;
 }
 
-const CHAT_API_URL = import.meta.env.VITE_COMMUNICATION_API_URL ?? "http://localhost:8080";
+const CHAT_API_URL = import.meta.env.VITE_COMMUNICATION_API_URL ?? window.location.origin;
 
 function getStoredUserId(): string | null {
   const raw = localStorage.getItem("auth_user");

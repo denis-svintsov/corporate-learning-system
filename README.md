@@ -100,6 +100,7 @@ docker compose up --build
 | `technolog` | Технолог (`TECHNOLOG`) |
 | `manager` | Руководитель (`MANAGER`) |
 | `expert` | Эксперт (`EXPERT`) |
+| `student1` ... `student5` | Дополнительные сотрудники (`USER`) для демонстрации группы участников. |
 
 ## Основные страницы
 

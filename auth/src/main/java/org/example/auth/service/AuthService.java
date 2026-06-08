@@ -67,6 +67,7 @@ public class AuthService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setFirstName(request.getFirstName());
+        user.setMiddleName(request.getMiddleName());
         user.setLastName(request.getLastName());
         user.setPositionId(request.getPositionId());
         user.setDepartmentId(request.getDepartmentId());
@@ -80,6 +81,7 @@ public class AuthService {
                 user.getUsername(),
                 user.getEmail(),
                 user.getFirstName(),
+                user.getMiddleName(),
                 user.getLastName(),
                 user.getPositionId(),
                 user.getDepartmentId(),

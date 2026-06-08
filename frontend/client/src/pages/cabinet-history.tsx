@@ -4,6 +4,21 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchUserCabinetHistory } from "@/lib/usersApi";
 import { CabinetNav } from "@/components/cabinet/CabinetNav";
 
+function historyActionLabel(action?: string | null) {
+  if (action === "COURSE_COMPLETED_CONFIRMED" || action === "COURSE_COMPLETED") return "Курс завершен";
+  if (action === "COURSE_FAILED_CONFIRMED") return "Курс не пройден";
+  if (action === "LESSON_COMPLETED") return "Урок завершен";
+  if (action === "COURSE_ASSIGNED") return "Курс назначен";
+  return action || "Событие обучения";
+}
+
+function historyDetailsLabel(details?: string | null) {
+  if (!details) return null;
+  if (details.startsWith("lessonId=")) return "Материал курса отмечен как изученный.";
+  if (details.startsWith("courseId=")) return "Курс отмечен как завершенный.";
+  return details;
+}
+
 export default function CabinetHistoryPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["user-cabinet-history"],
@@ -28,13 +43,13 @@ export default function CabinetHistoryPage() {
             {(data ?? []).map((item) => (
               <div key={item.id} className="rounded-md border p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="font-medium text-sm">{item.action}</div>
+                  <div className="font-medium text-sm">{historyActionLabel(item.action)}</div>
                   <div className="text-xs text-muted-foreground">
                     {new Date(item.timestamp).toLocaleString("ru-RU")}
                   </div>
                 </div>
-                {item.details && (
-                  <div className="mt-1 text-xs text-muted-foreground break-all">{item.details}</div>
+                {historyDetailsLabel(item.details) && (
+                  <div className="mt-1 text-xs text-muted-foreground break-all">{historyDetailsLabel(item.details)}</div>
                 )}
               </div>
             ))}

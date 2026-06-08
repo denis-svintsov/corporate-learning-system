@@ -46,20 +46,20 @@ export default function AuthPage() {
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regFirstName, setRegFirstName] = useState("");
+  const [regMiddleName, setRegMiddleName] = useState("");
   const [regLastName, setRegLastName] = useState("");
   const [regPositionId, setRegPositionId] = useState("");
   const [regDepartmentId, setRegDepartmentId] = useState("");
   const [regHireDate, setRegHireDate] = useState("");
-  const authBaseUrl =
-    import.meta.env.VITE_AUTH_API_URL ?? "http://localhost:8080/auth";
+  const apiBaseUrl = import.meta.env.VITE_API_URL ?? window.location.origin;
 
   useEffect(() => {
     // Загрузка departments и positions
     const loadData = async () => {
       try {
         const [deptRes, posRes] = await Promise.all([
-          fetch(`${authBaseUrl}/departments`),
-          fetch(`${authBaseUrl}/positions`),
+          fetch(`${apiBaseUrl}/departments`),
+          fetch(`${apiBaseUrl}/positions`),
         ]);
 
         if (deptRes.ok) {
@@ -117,6 +117,7 @@ export default function AuthPage() {
         email: regEmail,
         password: regPassword,
         firstName: regFirstName,
+        middleName: regMiddleName || undefined,
         lastName: regLastName,
         positionId: regPositionId || undefined,
         departmentId: regDepartmentId || undefined,
@@ -215,7 +216,17 @@ export default function AuthPage() {
               </CardHeader>
               <form onSubmit={handleRegister}>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName">Фамилия *</Label>
+                      <Input
+                        id="lastName"
+                        placeholder="Иванов"
+                        required
+                        value={regLastName}
+                        onChange={(e) => setRegLastName(e.target.value)}
+                      />
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="firstName">Имя *</Label>
                       <Input
@@ -227,13 +238,12 @@ export default function AuthPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lastName">Фамилия *</Label>
+                      <Label htmlFor="middleName">Отчество</Label>
                       <Input
-                        id="lastName"
-                        placeholder="Иванов"
-                        required
-                        value={regLastName}
-                        onChange={(e) => setRegLastName(e.target.value)}
+                        id="middleName"
+                        placeholder="Иванович"
+                        value={regMiddleName}
+                        onChange={(e) => setRegMiddleName(e.target.value)}
                       />
                     </div>
                   </div>

@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   CourseStatsDto,
   DepartmentProgressDto,
+  downloadAnalyticsReport,
   fetchAnalyticsDashboard,
   generateAnalyticsReport,
   UserEngagementDto,
@@ -25,6 +26,33 @@ function formatDate(value?: string | null) {
   if (!value) return "-";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("ru-RU");
+}
+
+function reportTypeLabel(value?: string | null) {
+  if (value === "dashboard-overview") return "Сводный отчет";
+  return value || "Отчет";
+}
+
+function reportFormatLabel(value?: string | null) {
+  if (value?.toLowerCase() === "pdf") return "PDF";
+  if (value?.toLowerCase() === "json") return "JSON";
+  return value?.toUpperCase() || "-";
+}
+
+function notificationTypeLabel(value?: string | null) {
+  if (value === "COURSE_ASSIGNED") return "Назначение курса";
+  if (value === "ASSIGNMENT_REQUESTED") return "Заявка на курс";
+  if (value === "LESSON_COMPLETED") return "Завершение урока";
+  if (value === "COURSE_COMPLETED") return "Завершение курса";
+  if (value === "SYSTEM") return "Системное";
+  return value || "Уведомление";
+}
+
+function notificationChannelLabel(value?: string | null) {
+  if (value === "IN_APP") return "В системе";
+  if (value === "EMAIL") return "Email";
+  if (value === "TELEGRAM") return "Telegram";
+  return value || "Канал";
 }
 
 function ErrorBlock({ error }: { error: unknown }) {
@@ -166,13 +194,31 @@ export default function AnalyticsPage() {
 
   const reportMutation = useMutation({
     mutationFn: () => generateAnalyticsReport(),
-    onSuccess: () => {
+    onSuccess: (report) => {
       queryClient.invalidateQueries({ queryKey: ["analytics-dashboard", user?.id] });
-      toast({ title: "Отчет сформирован", description: "Новый отчет добавлен в историю аналитики." });
+      downloadAnalyticsReport(report.id).catch((error) => {
+        toast({
+          title: "Отчет сформирован, но не скачался",
+          description: (error as Error).message,
+          variant: "destructive",
+        });
+      });
+      toast({ title: "PDF-отчет сформирован", description: "Файл скачивается и добавлен в историю аналитики." });
     },
     onError: (error) => {
       toast({
         title: "Ошибка формирования отчета",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const downloadReportMutation = useMutation({
+    mutationFn: (reportId: string) => downloadAnalyticsReport(reportId),
+    onError: (error) => {
+      toast({
+        title: "Ошибка скачивания отчета",
         description: (error as Error).message,
         variant: "destructive",
       });
@@ -341,16 +387,28 @@ export default function AnalyticsPage() {
                         <TableHead>Формат</TableHead>
                         <TableHead>Дата</TableHead>
                         <TableHead>Автор</TableHead>
+                        <TableHead className="text-right">Файл</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {reports.length === 0 && <EmptyRow colSpan={4} text="Отчеты еще не формировались" />}
+                      {reports.length === 0 && <EmptyRow colSpan={5} text="Отчеты еще не формировались" />}
                       {reports.map((report) => (
                         <TableRow key={report.id}>
-                          <TableCell className="font-medium">{report.reportType}</TableCell>
-                          <TableCell>{report.format.toUpperCase()}</TableCell>
+                          <TableCell className="font-medium">{reportTypeLabel(report.reportType)}</TableCell>
+                          <TableCell>{reportFormatLabel(report.format)}</TableCell>
                           <TableCell>{formatDate(report.generatedAt)}</TableCell>
                           <TableCell>{report.generatedBy || "-"}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={downloadReportMutation.isPending}
+                              onClick={() => downloadReportMutation.mutate(report.id)}
+                            >
+                              <Download className="h-4 w-4" />
+                              Скачать
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -367,8 +425,8 @@ export default function AnalyticsPage() {
                   {notifications.map((row) => (
                     <div key={`${row.type}-${row.channel}`} className="rounded-md border p-3">
                       <div className="flex items-center justify-between gap-2">
-                        <div className="font-medium">{row.type}</div>
-                        <Badge variant="outline">{row.channel}</Badge>
+                        <div className="font-medium">{notificationTypeLabel(row.type)}</div>
+                        <Badge variant="outline">{notificationChannelLabel(row.channel)}</Badge>
                       </div>
                       <div className="mt-2 text-sm text-muted-foreground">
                         Отправлено: {row.sentCount} • Прочитано: {row.readCount}

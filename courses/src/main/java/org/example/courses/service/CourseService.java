@@ -131,6 +131,7 @@ public class CourseService {
                 .allowedRolesCsv(CsvUtil.join(req.allowedRoles()))
                 .allowedDepartmentIdsCsv(CsvUtil.join(req.allowedDepartmentIds()))
                 .specializationsCsv(CsvUtil.join(req.specializations()))
+                .expertIdsCsv(CsvUtil.join(req.expertIds()))
                 .instructions(req.instructions())
                 .aggregatorUrl(req.aggregatorUrl())
                 .coverUrl(req.coverUrl())
@@ -170,6 +171,7 @@ public class CourseService {
         course.setAllowedRolesCsv(CsvUtil.join(req.allowedRoles()));
         course.setAllowedDepartmentIdsCsv(CsvUtil.join(req.allowedDepartmentIds()));
         course.setSpecializationsCsv(CsvUtil.join(req.specializations()));
+        course.setExpertIdsCsv(CsvUtil.join(req.expertIds()));
         course.setInstructions(req.instructions());
         course.setAggregatorUrl(req.aggregatorUrl());
         course.setCoverUrl(req.coverUrl());

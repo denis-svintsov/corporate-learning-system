@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,9 +23,10 @@ import {
 } from "@/lib/coursesApi";
 import { joinCourseRoom } from "@/lib/chatApi";
 import { fetchUserProfile } from "@/lib/usersApi";
+import { formatFullName } from "@/lib/userName";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarCheck, MessageSquare, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { AlertTriangle, Award, CalendarCheck, MessageSquare, Save, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
 function todayIso() {
@@ -40,6 +42,7 @@ function statusLabel(status?: AttendanceStatus) {
 
 function assignmentStatusLabel(status?: string | null) {
   if (status === "COMPLETED") return "Завершен";
+  if (status === "FAILED") return "Не пройден";
   if (status === "IN_PROGRESS") return "В процессе";
   if (status === "OVERDUE") return "Просрочен";
   return "Назначен";
@@ -51,6 +54,8 @@ function difficultyLabel(difficulty?: string | null) {
   return "Начальный";
 }
 
+const EMPTY_PARTICIPANTS: CourseParticipantDto[] = [];
+
 export default function CourseLeadingPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -59,6 +64,10 @@ export default function CourseLeadingPage() {
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const [attendanceDate, setAttendanceDate] = useState(todayIso());
   const [comments, setComments] = useState<Record<string, string>>({});
+  const [attendanceDrafts, setAttendanceDrafts] = useState<Record<string, AttendanceStatus>>({});
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState<AttendanceStatus>("PRESENT");
+  const [resultDrafts, setResultDrafts] = useState<Record<string, "PASSED" | "FAILED">>({});
 
   const canLeadCourses = (user?.roles ?? []).some((role) =>
     ["ADMIN", "HR", "TECHNOLOG", "EXPERT"].includes(role),
@@ -75,6 +84,7 @@ export default function CourseLeadingPage() {
     () => courses.find((course) => course.id === selectedCourseId) ?? courses[0] ?? null,
     [courses, selectedCourseId],
   );
+  const isFinalCourseDay = !!selectedCourse?.endDate && attendanceDate === selectedCourse.endDate;
 
   const participantsQuery = useQuery({
     queryKey: ["course-participants", selectedCourse?.id],
@@ -88,7 +98,27 @@ export default function CourseLeadingPage() {
     enabled: !!selectedCourse?.id && canLeadCourses,
   });
 
-  const participants = participantsQuery.data ?? [];
+  const participants = participantsQuery.data ?? EMPTY_PARTICIPANTS;
+
+  useEffect(() => {
+    setAttendanceDrafts({});
+    setSelectedParticipantIds([]);
+  }, [selectedCourse?.id, attendanceDate]);
+
+  useEffect(() => {
+    setResultDrafts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      participants.forEach((participant) => {
+        if (!next[participant.userId]) {
+          next[participant.userId] = (participant.attendancePercentage ?? 0) >= 50 ? "PASSED" : "FAILED";
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [participants]);
+
   const attendanceByUser = useMemo(() => {
     const map = new Map<string, AttendanceDto>();
     (attendanceQuery.data ?? []).forEach((item) => map.set(item.userId, item));
@@ -107,8 +137,7 @@ export default function CourseLeadingPage() {
       const settled = await Promise.allSettled(
         participantIds.map(async (id) => {
           const profile = await fetchUserProfile(id);
-          const fullName = [profile.lastName, profile.firstName].filter(Boolean).join(" ").trim();
-          return [id, fullName || profile.email || id] as const;
+          return [id, formatFullName(profile)] as const;
         }),
       );
       const map = new Map<string, string>();
@@ -121,16 +150,58 @@ export default function CourseLeadingPage() {
     },
   });
 
-  const markMutation = useMutation({
-    mutationFn: ({ participant, status }: { participant: CourseParticipantDto; status: AttendanceStatus }) =>
-      markCourseAttendance(selectedCourse!.id, {
-        userId: participant.userId,
-        attendanceDate,
-        status,
-        comment: comments[participant.userId]?.trim() || undefined,
-      }),
+  const currentAttendanceStatus = (participant: CourseParticipantDto, attendance?: AttendanceDto) =>
+    attendanceDrafts[participant.userId] ?? attendance?.status ?? "PRESENT";
+
+  const selectedParticipantSet = useMemo(() => new Set(selectedParticipantIds), [selectedParticipantIds]);
+  const allParticipantIds = useMemo(() => participants.map((participant) => participant.userId), [participants]);
+  const allParticipantsSelected = allParticipantIds.length > 0 && selectedParticipantIds.length === allParticipantIds.length;
+
+  const toggleParticipant = (userId: string, checked: boolean) => {
+    setSelectedParticipantIds((prev) => {
+      if (checked) return Array.from(new Set([...prev, userId]));
+      return prev.filter((id) => id !== userId);
+    });
+  };
+
+  const toggleAllParticipants = (checked: boolean) => {
+    setSelectedParticipantIds(checked ? allParticipantIds : []);
+  };
+
+  const applyStatusToSelected = (status: AttendanceStatus) => {
+    const targetIds = selectedParticipantIds.length > 0 ? selectedParticipantIds : allParticipantIds;
+    setBulkStatus(status);
+    setSelectedParticipantIds(targetIds);
+    setAttendanceDrafts((prev) => {
+      const next = { ...prev };
+      targetIds.forEach((id) => {
+        next[id] = status;
+      });
+      return next;
+    });
+  };
+
+  const saveAttendanceMutation = useMutation({
+    mutationFn: async () => {
+      const selected = participants.filter((participant) => selectedParticipantSet.has(participant.userId));
+      if (selected.length === 0) {
+        throw new Error("Выберите участников для отметки.");
+      }
+      await Promise.all(
+        selected.map((participant) => {
+          const attendance = attendanceByUser.get(participant.userId);
+          return markCourseAttendance(selectedCourse!.id, {
+            userId: participant.userId,
+            attendanceDate,
+            status: currentAttendanceStatus(participant, attendance),
+            comment: comments[participant.userId]?.trim() || undefined,
+          });
+        }),
+      );
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["course-attendance", selectedCourse?.id, attendanceDate] });
+      toast({ title: "Посещаемость сохранена", description: `Отмечено участников: ${selectedParticipantIds.length}` });
     },
     onError: (error) => {
       toast({
@@ -156,10 +227,25 @@ export default function CourseLeadingPage() {
   });
 
   const completionMutation = useMutation({
-    mutationFn: (participant: CourseParticipantDto) => confirmCourseCompletion(selectedCourse!.id, participant.userId),
+    mutationFn: async (targetParticipants: CourseParticipantDto[]) => {
+      if (targetParticipants.length === 0) {
+        throw new Error("Выберите участников, которым нужно завершить курс.");
+      }
+      await Promise.all(
+        targetParticipants.map((participant) =>
+          confirmCourseCompletion(
+            selectedCourse!.id,
+            participant.userId,
+            resultDrafts[participant.userId] !== "FAILED",
+          ),
+        ),
+      );
+      return targetParticipants.length;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["course-participants", selectedCourse?.id] });
       queryClient.invalidateQueries({ queryKey: ["assigned-courses"] });
+      queryClient.invalidateQueries({ queryKey: ["user-cabinet-progress"] });
       queryClient.invalidateQueries({ queryKey: ["certificates"] });
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["notifications-unread-count"] });
@@ -177,14 +263,29 @@ export default function CourseLeadingPage() {
     },
   });
 
-  const handleConfirmCompletion = (participant: CourseParticipantDto) => {
-    const participantName = participantNames.get(participant.userId) ?? "сотрудника";
+  const handleConfirmCompletion = () => {
+    const targetParticipants = participants.filter(
+      (participant) =>
+        selectedParticipantSet.has(participant.userId) &&
+        participant.assignmentStatus !== "COMPLETED" &&
+        participant.assignmentStatus !== "FAILED",
+    );
+    if (targetParticipants.length === 0) {
+      toast({
+        title: "Некого завершать",
+        description: "Выберите участников, у которых курс еще не завершен.",
+        variant: "destructive",
+      });
+      return;
+    }
     const courseTitle = selectedCourse?.title ?? "курс";
+    const passedCount = targetParticipants.filter((participant) => resultDrafts[participant.userId] !== "FAILED").length;
+    const failedCount = targetParticipants.length - passedCount;
     const confirmed = window.confirm(
-      `Подтвердить завершение курса "${courseTitle}" для ${participantName}? После этого будет создан сертификат.`,
+      `Сохранить итог курса "${courseTitle}" для выбранных участников (${targetParticipants.length})?\n\nПройдут курс: ${passedCount}\nНе пройдут курс: ${failedCount}\n\nСертификаты будут созданы только тем, кто прошел курс.`,
     );
     if (confirmed) {
-      completionMutation.mutate(participant);
+      completionMutation.mutate(targetParticipants);
     }
   };
 
@@ -266,40 +367,132 @@ export default function CourseLeadingPage() {
                 </div>
               </div>
 
+              <div className="flex flex-col gap-3 rounded-md border bg-muted/20 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="space-y-2">
+                    <Label>Быстрая отметка</Label>
+                    <Select value={bulkStatus} onValueChange={(value) => applyStatusToSelected(value as AttendanceStatus)}>
+                      <SelectTrigger className="w-full sm:w-64"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PRESENT">Присутствовали</SelectItem>
+                        <SelectItem value="ABSENT">Отсутствовали</SelectItem>
+                        <SelectItem value="EXCUSED">Уважительная причина</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Button
+                      variant="outline"
+                      disabled={participants.length === 0}
+                      onClick={() => applyStatusToSelected("PRESENT")}
+                    >
+                      Все присутствовали
+                    </Button>
+                    <Button
+                      disabled={saveAttendanceMutation.isPending || selectedParticipantIds.length === 0}
+                      onClick={() => saveAttendanceMutation.mutate()}
+                    >
+                      <Save className="h-4 w-4" />
+                      Сохранить посещаемость
+                    </Button>
+                  </div>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Выбрано для сохранения: {selectedParticipantIds.length} из {participants.length}. В строках можно изменить статус и комментарий перед сохранением.
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-md border p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 font-medium">
+                    <Award className="h-4 w-4" />
+                    Итог курса
+                  </div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {isFinalCourseDay
+                      ? "Последний день курса: проверьте посещаемость и выберите, кто прошел курс."
+                      : "Итог доступен в последний день курса. До этого ведется только посещаемость."}
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  disabled={!isFinalCourseDay || completionMutation.isPending || selectedParticipantIds.length === 0}
+                  onClick={handleConfirmCompletion}
+                >
+                  Сохранить итог выбранных
+                </Button>
+              </div>
+
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allParticipantsSelected}
+                        onCheckedChange={(checked) => toggleAllParticipants(checked === true)}
+                        aria-label="Выбрать всех участников"
+                      />
+                    </TableHead>
                     <TableHead>Участник</TableHead>
                     <TableHead>Назначение</TableHead>
+                    <TableHead>Посещаемость</TableHead>
                     <TableHead>Статус на дату</TableHead>
+                    {isFinalCourseDay && <TableHead>Итог</TableHead>}
                     <TableHead>Комментарий</TableHead>
-                    <TableHead className="text-right">Сохранить отметку</TableHead>
-                    <TableHead className="text-right">Завершение курса</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {participants.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      <TableCell colSpan={isFinalCourseDay ? 7 : 6} className="text-center text-muted-foreground">
                         У курса пока нет назначенных участников.
                       </TableCell>
                     </TableRow>
                   )}
                   {participants.map((participant) => {
                     const attendance = attendanceByUser.get(participant.userId);
+                    const attendancePercentage = participant.attendancePercentage ?? 0;
+                    const isLowAttendance = isFinalCourseDay && attendancePercentage < 50;
+                    const result = resultDrafts[participant.userId] ?? (attendancePercentage >= 50 ? "PASSED" : "FAILED");
                     return (
-                      <TableRow key={participant.userId}>
+                      <TableRow key={participant.userId} className={isLowAttendance ? "bg-destructive/5" : undefined}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedParticipantSet.has(participant.userId)}
+                            onCheckedChange={(checked) => toggleParticipant(participant.userId, checked === true)}
+                            aria-label={`Выбрать ${participantNames.get(participant.userId) ?? participant.userId}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">
                           {participantNames.get(participant.userId) ?? participant.userId}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{assignmentStatusLabel(participant.assignmentStatus)}</Badge>
+                          <Badge variant={participant.assignmentStatus === "FAILED" ? "destructive" : "outline"}>
+                            {assignmentStatusLabel(participant.assignmentStatus)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className={isLowAttendance ? "font-medium text-destructive" : "font-medium"}>
+                            {attendancePercentage}%
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {participant.presentDays ?? 0}/{participant.totalCourseDays ?? 0} дней
+                          </div>
+                          {isLowAttendance && (
+                            <div className="mt-1 flex items-center gap-1 text-xs text-destructive">
+                              <AlertTriangle className="h-3 w-3" />
+                              Ниже 50%
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Select
-                            value={attendance?.status ?? "PRESENT"}
+                            value={currentAttendanceStatus(participant, attendance)}
                             onValueChange={(value) =>
-                              markMutation.mutate({ participant, status: value as AttendanceStatus })
+                              setAttendanceDrafts((prev) => ({
+                                ...prev,
+                                [participant.userId]: value as AttendanceStatus,
+                              }))
                             }
                           >
                             <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
@@ -311,6 +504,26 @@ export default function CourseLeadingPage() {
                           </Select>
                           <div className="mt-1 text-xs text-muted-foreground">{statusLabel(attendance?.status)}</div>
                         </TableCell>
+                        {isFinalCourseDay && (
+                          <TableCell>
+                            <Select
+                              value={result}
+                              disabled={participant.assignmentStatus === "COMPLETED" || participant.assignmentStatus === "FAILED"}
+                              onValueChange={(value) =>
+                                setResultDrafts((prev) => ({
+                                  ...prev,
+                                  [participant.userId]: value as "PASSED" | "FAILED",
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="PASSED">Прошел</SelectItem>
+                                <SelectItem value="FAILED">Не прошел</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Textarea
                             className="min-h-10"
@@ -319,34 +532,7 @@ export default function CourseLeadingPage() {
                             onChange={(event) =>
                               setComments((prev) => ({ ...prev, [participant.userId]: event.target.value }))
                             }
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={markMutation.isPending}
-                            onClick={() =>
-                              markMutation.mutate({
-                                participant,
-                                status: attendance?.status ?? "PRESENT",
-                              })
-                            }
-                          >
-                            Сохранить
-                          </Button>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            disabled={
-                              completionMutation.isPending ||
-                              participant.assignmentStatus === "COMPLETED"
-                            }
-                            onClick={() => handleConfirmCompletion(participant)}
-                          >
-                            {participant.assignmentStatus === "COMPLETED" ? "Завершен" : "Подтвердить завершение"}
-                          </Button>
+                            />
                         </TableCell>
                       </TableRow>
                     );

@@ -46,7 +46,7 @@ public class UserService {
     }
 
     public List<UserProfileDto> searchByName(String name) {
-        return userRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(name, name).stream()
+        return userRepository.findByFirstNameContainingIgnoreCaseOrMiddleNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(name, name, name).stream()
                 .map(this::toProfileDto)
                 .toList();
     }
@@ -82,6 +82,7 @@ public class UserService {
 
         user.setEmail(request.email());
         user.setFirstName(request.firstName());
+        user.setMiddleName(request.middleName());
         user.setLastName(request.lastName());
         user.setHireDate(request.hireDate());
         user.setStatus(request.status());
@@ -108,6 +109,7 @@ public class UserService {
         user.setUsername(request.username());
         user.setEmail(request.email());
         user.setFirstName(request.firstName());
+        user.setMiddleName(request.middleName());
         user.setLastName(request.lastName());
         user.setHireDate(request.hireDate());
         user.setStatus(request.status() == null || request.status().isBlank() ? "active" : request.status());
@@ -149,6 +151,7 @@ public class UserService {
                 user.getId(),
                 user.getEmail(),
                 user.getFirstName(),
+                user.getMiddleName(),
                 user.getLastName(),
                 user.getPositionId(),
                 user.getPosition() != null ? user.getPosition().getTitle() : null,

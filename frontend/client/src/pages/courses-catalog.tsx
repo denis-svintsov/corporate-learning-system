@@ -15,6 +15,8 @@ export default function CoursesCatalog() {
     queryKey: ["assigned-courses", user?.id],
     queryFn: () => fetchAssignedCourses(),
     enabled: !!user?.id,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
   const { data: myRequests = [] } = useQuery({
     queryKey: ["assignment-requests-my", user?.id],
@@ -33,6 +35,7 @@ export default function CoursesCatalog() {
 
   const isArchived = (course: AssignedCourseDto) => {
     if (course.status === "COMPLETED") return true;
+    if (course.status === "FAILED") return true;
     if (course.status === "OVERDUE") return true;
     const now = new Date();
     const nowDayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -65,6 +68,7 @@ export default function CoursesCatalog() {
     if (status === "ASSIGNED") return "Назначен";
     if (status === "IN_PROGRESS") return "В процессе";
     if (status === "COMPLETED") return "Завершен";
+    if (status === "FAILED") return "Не пройден";
     if (status === "OVERDUE") return "Просрочен";
     return "Назначен";
   };
@@ -200,7 +204,7 @@ export default function CoursesCatalog() {
                         <Badge className="bg-amber-500">На модерации</Badge>
                       </div>
                       <CardHeader className="p-4 pb-2">
-                        <h3 className="line-clamp-2 font-bold leading-tight">{request.courseTitle ?? request.courseId}</h3>
+                        <h3 className="line-clamp-2 font-bold leading-tight">{request.courseTitle ?? "Курс"}</h3>
                         <p className="text-sm text-muted-foreground">
                           Отправлено: {request.createdAt ? new Date(request.createdAt).toLocaleDateString("ru-RU") : "-"}
                         </p>

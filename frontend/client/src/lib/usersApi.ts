@@ -4,6 +4,7 @@ export interface UserProfileDto {
   id: string;
   email: string;
   firstName: string;
+  middleName?: string | null;
   lastName: string;
   positionId?: string | null;
   positionTitle?: string | null;
@@ -63,7 +64,7 @@ export interface UserCabinetDto {
 }
 
 const USERS_API_URL =
-  import.meta.env.VITE_USERS_API_URL ?? "http://localhost:8080";
+  import.meta.env.VITE_USERS_API_URL ?? window.location.origin;
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem("auth_token");
@@ -88,6 +89,10 @@ export async function fetchPositions(): Promise<PositionDto[]> {
 
 export async function fetchDepartments(): Promise<DepartmentDto[]> {
   return fetchJson<DepartmentDto[]>(`${USERS_API_URL}/departments`);
+}
+
+export async function fetchUsersByDepartment(departmentId: string): Promise<UserProfileDto[]> {
+  return fetchJson<UserProfileDto[]>(`${USERS_API_URL}/users?department=${departmentId}`);
 }
 
 export async function fetchUserCabinet(historyLimit = 20): Promise<UserCabinetDto> {

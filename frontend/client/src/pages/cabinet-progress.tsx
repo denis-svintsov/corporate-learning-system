@@ -11,19 +11,32 @@ function assignmentProgress(status?: string | null) {
   if (status === "COMPLETED") return 100;
   if (status === "IN_PROGRESS") return 50;
   if (status === "OVERDUE") return 0;
+  if (status === "FAILED") return 0;
   if (status === "ASSIGNED") return 10;
   return 0;
+}
+
+function assignmentStatusLabel(status?: string | null) {
+  if (status === "COMPLETED") return "Курс завершен";
+  if (status === "FAILED") return "Курс не пройден";
+  if (status === "IN_PROGRESS") return "Курс в процессе";
+  if (status === "OVERDUE") return "Курс просрочен";
+  return "Курс назначен";
 }
 
 export default function CabinetProgressPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["user-cabinet-progress"],
     queryFn: () => fetchUserCabinetProgress(),
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: assignedCourses = [] } = useQuery({
     queryKey: ["assigned-courses-for-progress"],
     queryFn: () => fetchAssignedCourses(),
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   return (
@@ -59,6 +72,11 @@ export default function CabinetProgressPage() {
                       <span className="font-semibold">Прогресс {progress}%</span>
                     </div>
                     <Progress value={progress} className="h-2" />
+                    {assignment?.status && (
+                      <div className="mt-2 text-sm text-muted-foreground">
+                        {assignmentStatusLabel(assignment.status)}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2 text-sm">

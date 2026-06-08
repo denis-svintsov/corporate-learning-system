@@ -19,6 +19,7 @@ import {
 } from "@/lib/coursesApi";
 import { useEffect, useMemo, useState } from "react";
 import { fetchUserProfile } from "@/lib/usersApi";
+import { formatFullName } from "@/lib/userName";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -39,6 +40,13 @@ function durationLabel(minutes?: number | null) {
   if (!minutes) return null;
   const hours = Math.round((minutes / 60) * 10) / 10;
   return `${hours} ч`;
+}
+
+function difficultyLabel(difficulty?: string | null) {
+  if (difficulty === "BEGINNER") return "Начальный";
+  if (difficulty === "INTERMEDIATE") return "Средний";
+  if (difficulty === "ADVANCED") return "Продвинутый";
+  return null;
 }
 
 export default function AdminApproval() {
@@ -78,8 +86,7 @@ export default function AdminApproval() {
       const settled = await Promise.allSettled(
         userIds.map(async (id) => {
           const profile = await fetchUserProfile(id);
-          const fullName = [profile.lastName, profile.firstName].filter(Boolean).join(" ").trim();
-          return [id, fullName || profile.email || id] as const;
+          return [id, formatFullName(profile)] as const;
         }),
       );
       const map = new Map<string, string>();
@@ -96,6 +103,7 @@ export default function AdminApproval() {
     mutationFn: (requestId: string) => approveAssignmentRequest(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assignment-requests-admin"] });
+      queryClient.invalidateQueries({ queryKey: ["assignment-requests-pending-count"] });
       queryClient.invalidateQueries({ queryKey: ["assigned-courses"] });
     },
     onError: (e) => {
@@ -111,6 +119,7 @@ export default function AdminApproval() {
     mutationFn: (requestId: string) => rejectAssignmentRequest(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assignment-requests-admin"] });
+      queryClient.invalidateQueries({ queryKey: ["assignment-requests-pending-count"] });
     },
     onError: (e) => {
       toast({
@@ -175,9 +184,9 @@ export default function AdminApproval() {
             </TableCell>
             <TableCell>
               <div className="space-y-2">
-                <div className="font-medium">{req.courseTitle ?? req.courseId}</div>
+                <div className="font-medium">{req.courseTitle ?? "Курс"}</div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  {req.courseDifficulty && <Badge variant="outline">{req.courseDifficulty}</Badge>}
+                  {difficultyLabel(req.courseDifficulty) && <Badge variant="outline">{difficultyLabel(req.courseDifficulty)}</Badge>}
                   {durationLabel(req.courseDurationMinutes) && <Badge variant="outline">{durationLabel(req.courseDurationMinutes)}</Badge>}
                   {req.courseId && (
                     <a href={`/course/${req.courseId}`} className="underline underline-offset-2 hover:text-foreground">
