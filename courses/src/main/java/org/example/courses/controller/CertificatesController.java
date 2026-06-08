@@ -20,15 +20,7 @@ public class CertificatesController {
 
     @GetMapping("/my")
     public List<CertificateDto> my(@RequestHeader("X-User-Id") String userId) {
-        return certificateService.myCertificates(userId).stream()
-                .map(c -> new CertificateDto(
-                        c.getId(),
-                        c.getCourse().getId(),
-                        c.getIssueDate(),
-                        c.getCertificateUrl(),
-                        c.getHash()
-                ))
-                .toList();
+        return certificateService.myCertificateDtos(userId);
     }
 
     /**
@@ -44,7 +36,6 @@ public class CertificatesController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"certificate-" + id + ".pdf\"")
                 .contentType(MediaType.APPLICATION_PDF)
-                .body(cert.getPdfBytes());
+                .body(certificateService.downloadPdf(cert));
     }
 }
-

@@ -9,14 +9,22 @@ import {
   MessageSquare, 
   FileText, 
   Settings,
-  LogOut,
-  Train
+  Building2,
+  BarChart3,
+  ClipboardCheck,
+  PencilRuler,
 } from "lucide-react";
 
 export function Sidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
-  const isAdmin = (user?.roles ?? []).includes("ADMIN");
+  const roles = user?.roles ?? [];
+  const canModerate = roles.some((role) => ["ADMIN", "HR"].includes(role));
+  const canManageCourses = roles.some((role) => ["ADMIN", "TECHNOLOG"].includes(role));
+  const canLeadCourses = roles.some((role) => ["ADMIN", "HR", "TECHNOLOG", "EXPERT"].includes(role));
+  const canViewAnalytics = (user?.roles ?? []).some((role) =>
+    ["ADMIN", "HR", "MANAGER", "TECHNOLOG"].includes(role),
+  );
 
   const menuItems = [
     { icon: LayoutDashboard, label: "Дашборд", href: "/" },
@@ -28,15 +36,27 @@ export function Sidebar() {
   ];
 
   const adminItems = [
-    { icon: Settings, label: "Администрирование", href: "/admin" },
+    { icon: Settings, label: "Заявки и лимиты", href: "/admin" },
+  ];
+
+  const courseAdminItems = [
+    { icon: PencilRuler, label: "Управление курсами", href: "/admin/courses" },
+  ];
+
+  const expertItems = [
+    { icon: ClipboardCheck, label: "Ведение курсов", href: "/teaching" },
+  ];
+
+  const analyticsItems = [
+    { icon: BarChart3, label: "Аналитика", href: "/analytics" },
   ];
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
       <div className="flex h-16 items-center border-b px-6">
         <div className="flex items-center gap-2 font-bold text-xl text-primary">
-          <Train className="h-6 w-6" />
-          <span>СДО</span>
+          <Building2 className="h-6 w-6" />
+          <span className="truncate">Платформа обучения</span>
         </div>
       </div>
 
@@ -58,12 +78,73 @@ export function Sidebar() {
             </Link>
           ))}
 
-          {isAdmin && (
+          {(canModerate || canManageCourses) && (
             <>
               <div className="my-4 border-t px-4 pt-4 text-xs font-semibold uppercase text-muted-foreground">
-                Администратор
+                Управление
               </div>
-              {adminItems.map((item) => (
+              {canModerate && adminItems.map((item) => (
+                <Link key={item.href} href={item.href}>
+                  <a
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      location === item.href
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </a>
+                </Link>
+              ))}
+              {canManageCourses && courseAdminItems.map((item) => (
+                <Link key={item.href} href={item.href}>
+                  <a
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      location === item.href
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </a>
+                </Link>
+              ))}
+            </>
+          )}
+
+          {canLeadCourses && (
+            <>
+              <div className="my-4 border-t px-4 pt-4 text-xs font-semibold uppercase text-muted-foreground">
+                Сопровождение
+              </div>
+              {expertItems.map((item) => (
+                <Link key={item.href} href={item.href}>
+                  <a
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      location === item.href
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                  </a>
+                </Link>
+              ))}
+            </>
+          )}
+
+          {canViewAnalytics && (
+            <>
+              <div className="my-4 border-t px-4 pt-4 text-xs font-semibold uppercase text-muted-foreground">
+                Отчетность
+              </div>
+              {analyticsItems.map((item) => (
                 <Link key={item.href} href={item.href}>
                   <a
                     className={cn(
@@ -81,15 +162,6 @@ export function Sidebar() {
             </>
           )}
         </nav>
-      </div>
-
-      <div className="border-t p-4">
-        <Link href="/auth">
-          <button className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10">
-            <LogOut className="h-4 w-4" />
-            Выйти
-          </button>
-        </Link>
       </div>
     </div>
   );

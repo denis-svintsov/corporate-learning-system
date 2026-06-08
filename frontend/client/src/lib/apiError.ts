@@ -36,6 +36,10 @@ function defaultMessageByStatus(status: number): string {
 }
 
 export async function extractApiErrorMessage(res: Response, fallback?: string): Promise<string> {
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.dispatchEvent(new Event("auth:unauthorized"));
+  }
+
   let raw = "";
   try {
     raw = await res.text();

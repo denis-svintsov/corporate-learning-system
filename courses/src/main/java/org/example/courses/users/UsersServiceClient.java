@@ -30,6 +30,13 @@ public class UsersServiceClient {
         );
     }
 
+    public UserProfileDto getUserProfile(String userId) {
+        return restTemplate.getForObject(
+                usersServiceUrl + "/users/" + userId,
+                UserProfileDto.class
+        );
+    }
+
     public List<InternalUserContextDto> getActiveUsers() {
         ResponseEntity<List<InternalUserContextDto>> response = restTemplate.exchange(
                 usersServiceUrl + "/internal/users/active",

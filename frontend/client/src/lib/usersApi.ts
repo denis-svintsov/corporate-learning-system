@@ -22,6 +22,21 @@ export interface UserSettingsDto {
   timezone: string;
 }
 
+export interface PositionDto {
+  positionId: string;
+  title: string;
+  description?: string | null;
+  grade?: string | null;
+}
+
+export interface DepartmentDto {
+  departmentId: string;
+  name: string;
+  description?: string | null;
+  managerId?: string | null;
+  parentDepartmentId?: string | null;
+}
+
 export interface UserCourseProgressDto {
   courseId: string;
   courseTitle: string;
@@ -65,6 +80,14 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 export async function fetchUserProfile(userId: string): Promise<UserProfileDto> {
   return fetchJson<UserProfileDto>(`${USERS_API_URL}/users/${userId}`);
+}
+
+export async function fetchPositions(): Promise<PositionDto[]> {
+  return fetchJson<PositionDto[]>(`${USERS_API_URL}/positions`);
+}
+
+export async function fetchDepartments(): Promise<DepartmentDto[]> {
+  return fetchJson<DepartmentDto[]>(`${USERS_API_URL}/departments`);
 }
 
 export async function fetchUserCabinet(historyLimit = 20): Promise<UserCabinetDto> {

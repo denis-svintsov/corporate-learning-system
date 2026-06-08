@@ -2,7 +2,7 @@ import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen } from "lucide-react";
+import { BookOpen, CalendarClock, Clock } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { AssignedCourseDto, fetchAssignedCourses, fetchMyAssignmentRequests } from "@/lib/coursesApi";
@@ -54,6 +54,52 @@ export default function CoursesCatalog() {
     return `${hours} ч`;
   };
 
+  const difficultyLabel = (difficulty?: string | null) => {
+    if (difficulty === "BEGINNER") return "Начальный";
+    if (difficulty === "INTERMEDIATE") return "Средний";
+    if (difficulty === "ADVANCED") return "Продвинутый";
+    return "Сложность не указана";
+  };
+
+  const assignmentStatusLabel = (status?: string | null) => {
+    if (status === "ASSIGNED") return "Назначен";
+    if (status === "IN_PROGRESS") return "В процессе";
+    if (status === "COMPLETED") return "Завершен";
+    if (status === "OVERDUE") return "Просрочен";
+    return "Назначен";
+  };
+
+  const formatDate = (value?: string | null) => {
+    const date = toDate(value);
+    return date ? date.toLocaleDateString("ru-RU") : null;
+  };
+
+  const CourseCover = ({ course, archived = false }: { course: AssignedCourseDto; archived?: boolean }) => (
+    <div
+      className="relative aspect-video w-full overflow-hidden bg-gradient-to-br from-emerald-50 via-sky-50 to-violet-50"
+      style={{
+        backgroundImage: course.courseCoverUrl ? `url(${course.courseCoverUrl})` : undefined,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
+      {!course.courseCoverUrl && (
+        <div className="flex h-full flex-col justify-between p-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-white/85 text-primary shadow-sm">
+            <BookOpen className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="max-w-[85%] text-lg font-semibold leading-tight text-slate-800">
+              {course.courseTitle ?? "Учебный курс"}
+            </div>
+            <div className="mt-2 text-xs font-medium text-slate-500">Корпоративное обучение</div>
+          </div>
+        </div>
+      )}
+      {archived && <div className="absolute inset-0 bg-background/40" />}
+    </div>
+  );
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -95,38 +141,30 @@ export default function CoursesCatalog() {
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {activeCourses.map((course) => (
                     <Card key={course.courseId ?? course.id} className="flex flex-col overflow-hidden transition-all hover:shadow-lg">
-                      <div
-                        className="aspect-video w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 flex items-center justify-center"
-                        style={{
-                          backgroundImage: course.courseCoverUrl ? `url(${course.courseCoverUrl})` : undefined,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }}
-                      >
-                        {!course.courseCoverUrl && (
-                          <div className="flex items-center gap-2 text-slate-500">
-                            <BookOpen className="h-5 w-5" />
-                            <span className="text-sm font-medium">Курс</span>
-                          </div>
-                        )}
-                      </div>
+                      <CourseCover course={course} />
                       <CardHeader className="p-4 pb-2">
                         <div className="flex items-start justify-between gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            {course.courseCategoryId ?? "Без категории"}
-                          </Badge>
                           <Badge variant="secondary" className="text-xs">
-                            {course.courseDifficulty ?? "—"}
+                            {difficultyLabel(course.courseDifficulty)}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {assignmentStatusLabel(course.status)}
                           </Badge>
                         </div>
                         <h3 className="line-clamp-2 font-bold leading-tight">{course.courseTitle ?? "Без названия"}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Статус: {course.status ?? "ASSIGNED"}
-                        </p>
                       </CardHeader>
                       <CardContent className="flex-1 p-4 pt-2">
-                        <div className="text-xs text-muted-foreground mb-2">
-                          Длительность: {durationLabel(course.courseDurationMinutes)}
+                        <div className="mb-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" />
+                            {durationLabel(course.courseDurationMinutes)}
+                          </span>
+                          {(formatDate(course.dueDate) || formatDate(course.courseEndDate)) && (
+                            <span className="inline-flex items-center gap-1">
+                              <CalendarClock className="h-3.5 w-3.5" />
+                              до {formatDate(course.dueDate) ?? formatDate(course.courseEndDate)}
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-3">
                           {course.courseDescription || "Описание пока не заполнено."}
@@ -198,38 +236,30 @@ export default function CoursesCatalog() {
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {archivedCourses.map((course) => (
                     <Card key={course.courseId ?? course.id} className="flex flex-col overflow-hidden opacity-90">
-                      <div
-                        className="aspect-video w-full overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 flex items-center justify-center"
-                        style={{
-                          backgroundImage: course.courseCoverUrl ? `url(${course.courseCoverUrl})` : undefined,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }}
-                      >
-                        {!course.courseCoverUrl && (
-                          <div className="flex items-center gap-2 text-slate-500">
-                            <BookOpen className="h-5 w-5" />
-                            <span className="text-sm font-medium">Курс</span>
-                          </div>
-                        )}
-                      </div>
+                      <CourseCover course={course} archived />
                       <CardHeader className="p-4 pb-2">
                         <div className="flex items-start justify-between gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            {course.courseCategoryId ?? "Без категории"}
-                          </Badge>
                           <Badge variant="destructive" className="text-xs">
                             В архиве
                           </Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            {difficultyLabel(course.courseDifficulty)}
+                          </Badge>
                         </div>
                         <h3 className="line-clamp-2 font-bold leading-tight">{course.courseTitle ?? "Без названия"}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Статус: {course.status ?? "ASSIGNED"}
-                        </p>
                       </CardHeader>
                       <CardContent className="flex-1 p-4 pt-2">
-                        <div className="text-xs text-muted-foreground mb-2">
-                          Длительность: {durationLabel(course.courseDurationMinutes)}
+                        <div className="mb-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5" />
+                            {durationLabel(course.courseDurationMinutes)}
+                          </span>
+                          {(formatDate(course.dueDate) || formatDate(course.courseEndDate)) && (
+                            <span className="inline-flex items-center gap-1">
+                              <CalendarClock className="h-3.5 w-3.5" />
+                              до {formatDate(course.dueDate) ?? formatDate(course.courseEndDate)}
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground line-clamp-3">
                           {course.courseDescription || "Описание пока не заполнено."}

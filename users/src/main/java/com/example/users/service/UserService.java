@@ -19,7 +19,7 @@ import java.util.Set;
 @Service
 public class UserService {
 
-    private static final Set<String> ALLOWED_ROLES = Set.of("USER", "HR", "ADMIN");
+    private static final Set<String> ALLOWED_ROLES = Set.of("USER", "MANAGER", "HR", "TECHNOLOG", "EXPERT", "ADMIN");
 
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;

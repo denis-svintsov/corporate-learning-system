@@ -1,5 +1,6 @@
 package com.example.communication.service;
 
+import com.example.communication.courses.CoursesServiceClient;
 import com.example.communication.dto.ChatParticipantDto;
 import com.example.communication.dto.ChatRoomDto;
 import com.example.communication.dto.CreateChatRoomRequest;
@@ -16,7 +17,6 @@ import com.example.communication.model.MessageType;
 import com.example.communication.repository.ChatMessageRepository;
 import com.example.communication.repository.ChatParticipantRepository;
 import com.example.communication.repository.ChatRoomRepository;
-import com.example.communication.repository.CourseAssignmentAccessRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.kafka.KafkaException;
@@ -39,7 +39,7 @@ public class ChatService {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatParticipantRepository chatParticipantRepository;
     private final ChatMessageRepository chatMessageRepository;
-    private final CourseAssignmentAccessRepository courseAssignmentAccessRepository;
+    private final CoursesServiceClient coursesServiceClient;
     private final EventPublisher eventPublisher;
     private final OnlineStatusService onlineStatusService;
 
@@ -47,14 +47,14 @@ public class ChatService {
             ChatRoomRepository chatRoomRepository,
             ChatParticipantRepository chatParticipantRepository,
             ChatMessageRepository chatMessageRepository,
-            CourseAssignmentAccessRepository courseAssignmentAccessRepository,
+            CoursesServiceClient coursesServiceClient,
             EventPublisher eventPublisher,
             OnlineStatusService onlineStatusService
     ) {
         this.chatRoomRepository = chatRoomRepository;
         this.chatParticipantRepository = chatParticipantRepository;
         this.chatMessageRepository = chatMessageRepository;
-        this.courseAssignmentAccessRepository = courseAssignmentAccessRepository;
+        this.coursesServiceClient = coursesServiceClient;
         this.eventPublisher = eventPublisher;
         this.onlineStatusService = onlineStatusService;
     }
@@ -182,8 +182,9 @@ public class ChatService {
             throw new IllegalArgumentException("userId is required");
         }
         Set<String> normalizedRoles = normalizeRoles(roles);
-        boolean privileged = normalizedRoles.contains("ADMIN") || normalizedRoles.contains("HR");
-        if (!privileged && !courseAssignmentAccessRepository.hasAssignment(userId, courseId)) {
+        boolean instructor = normalizedRoles.contains("EXPERT") || normalizedRoles.contains("TECHNOLOG");
+        boolean privileged = normalizedRoles.contains("ADMIN") || normalizedRoles.contains("HR") || instructor;
+        if (!privileged && !coursesServiceClient.hasAssignment(userId, courseId)) {
             throw new ForbiddenOperationException("You are not allowed to join this course chat");
         }
         ChatRoom room = chatRoomRepository.findByCourseIdAndType(courseId, ChatRoomType.COURSE)
@@ -194,7 +195,7 @@ public class ChatService {
                     r.setType(ChatRoomType.COURSE);
                     return chatRoomRepository.save(r);
                 });
-        addParticipantIfAbsent(room.getId(), userId, ChatParticipantRole.PARTICIPANT);
+        addParticipantIfAbsent(room.getId(), userId, instructor ? ChatParticipantRole.INSTRUCTOR : ChatParticipantRole.PARTICIPANT);
         return toRoomDto(room);
     }
 

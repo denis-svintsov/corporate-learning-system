@@ -45,7 +45,7 @@ export default function CabinetProgressPage() {
           )}
           {(data?.courses ?? []).map((course) => {
             const assignment = assignedCourses.find((a) => a.courseId === course.courseId);
-            const progress = assignment ? assignmentProgress(assignment.status) : course.progressPercentage;
+            const progress = Math.max(course.progressPercentage, assignmentProgress(assignment?.status));
 
             return (
               <Card key={course.courseId}>

@@ -10,10 +10,15 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface CourseAssignmentRepository extends JpaRepository<CourseAssignment, String> {
 
     List<CourseAssignment> findByUserId(String userId);
+
+    List<CourseAssignment> findByCourse_Id(String courseId);
+
+    Optional<CourseAssignment> findByUserIdAndCourse_Id(String userId, String courseId);
 
     List<CourseAssignment> findByUserIdAndStatusIn(String userId, List<AssignmentStatus> statuses);
 

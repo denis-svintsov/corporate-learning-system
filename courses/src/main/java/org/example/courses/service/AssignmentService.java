@@ -16,11 +16,14 @@ import org.example.courses.model.CourseAssignment;
 import org.example.courses.model.CourseAssignmentRequestEntity;
 import org.example.courses.model.Enrollment;
 import org.example.courses.model.EnrollmentStatus;
+import org.example.courses.model.LearningHistory;
+import org.example.courses.kafka.CourseCompletedEvent;
 import org.example.courses.repository.AssignmentPolicyRepository;
 import org.example.courses.repository.CourseAssignmentRequestRepository;
 import org.example.courses.repository.CourseAssignmentRepository;
 import org.example.courses.repository.EnrollmentRepository;
 import org.example.courses.repository.CourseRepository;
+import org.example.courses.repository.LearningHistoryRepository;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +47,8 @@ public class AssignmentService {
     private final CourseAssignmentRequestRepository courseAssignmentRequestRepository;
     private final AssignmentPolicyRepository assignmentPolicyRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final LearningHistoryRepository learningHistoryRepository;
+    private final CertificateService certificateService;
     private final EventPublisher eventPublisher;
 
     @Transactional
@@ -136,6 +141,50 @@ public class AssignmentService {
 
     public AssignmentPolicyDto getAssignmentPolicy() {
         return toPolicyDto(getOrCreatePolicy());
+    }
+
+    public boolean hasAssignment(String userId, String courseId) {
+        if (userId == null || userId.isBlank() || courseId == null || courseId.isBlank()) {
+            return false;
+        }
+        return courseAssignmentRepository.existsByUserIdAndCourse_Id(userId, courseId);
+    }
+
+    @Transactional
+    public CourseAssignment confirmCompletion(String courseId, String userId, String confirmedBy) {
+        CourseAssignment assignment = courseAssignmentRepository.findByUserIdAndCourse_Id(userId, courseId)
+                .orElseThrow(() -> new IllegalArgumentException("Assignment not found for user and course."));
+        Course course = assignment.getCourse();
+        if (course == null) {
+            course = courseRepository.findById(courseId)
+                    .orElseThrow(() -> new IllegalArgumentException("Course not found: " + courseId));
+        }
+        final Course completionCourse = course;
+
+        assignment.setStatus(AssignmentStatus.COMPLETED);
+        CourseAssignment saved = courseAssignmentRepository.save(assignment);
+
+        Enrollment enrollment = enrollmentRepository
+                .findFirstByUserIdAndCourse_IdOrderByEnrollmentDateDesc(userId, courseId)
+                .orElseGet(() -> Enrollment.builder()
+                        .userId(userId)
+                        .course(completionCourse)
+                        .status(EnrollmentStatus.ACTIVE)
+                        .build());
+        enrollment.setStatus(EnrollmentStatus.COMPLETED);
+        enrollment.setCompletionDate(OffsetDateTime.now());
+        enrollmentRepository.save(enrollment);
+
+        certificateService.issueIfNeeded(userId, courseId);
+
+        learningHistoryRepository.save(LearningHistory.builder()
+                .userId(userId)
+                .action("COURSE_COMPLETED_CONFIRMED")
+                .details("Завершение курса \"" + completionCourse.getTitle() + "\" подтверждено пользователем " + confirmedBy)
+                .build());
+
+        eventPublisher.publishCourseCompleted(new CourseCompletedEvent(userId, courseId, OffsetDateTime.now()));
+        return saved;
     }
 
     private CourseAssignment assignInternal(String userId, String courseId, String assignedBy, java.time.LocalDate dueDate) {

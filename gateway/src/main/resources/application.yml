@@ -47,11 +47,11 @@ spring:
         - id: users-service
           uri: ${USER_SERVICE_URL:http://users:8080}
           predicates:
-            - Path=/users/**,/departments/**
+            - Path=/users/**,/departments/**,/positions/**
         - id: courses-service
           uri: ${COURSES_SERVICE_URL:http://courses:8081}
           predicates:
-            - Path=/courses/**
+            - Path=/courses/**,/progress/**,/lessons/**,/certificates/**
         - id: communication-service
           uri: ${COMMUNICATION_SERVICE_URL:http://communication:8080}
           predicates:

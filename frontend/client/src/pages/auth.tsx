@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Train, ArrowRight } from "lucide-react";
+import { Building2, ArrowRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { extractApiErrorMessage } from "@/lib/apiError";
@@ -94,7 +94,7 @@ export default function AuthPage() {
       await login(loginUsername, loginPassword);
       toast({
         title: "Успешный вход",
-        description: "Добро пожаловать в систему СДО",
+        description: "Добро пожаловать в систему обучения",
       });
     } catch (error: any) {
       toast({
@@ -124,7 +124,7 @@ export default function AuthPage() {
       });
       toast({
         title: "Регистрация успешна",
-        description: "Добро пожаловать в систему СДО",
+        description: "Добро пожаловать в систему обучения",
       });
     } catch (error: any) {
       toast({
@@ -148,10 +148,10 @@ export default function AuthPage() {
       <div className="z-10 w-full max-w-md px-4">
         <div className="flex flex-col items-center mb-8 text-center">
           <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <Train className="h-8 w-8 text-primary" />
+            <Building2 className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-secondary">СДО</h1>
-          <p className="text-muted-foreground mt-2">Система Дистанционного Обучения</p>
+          <h1 className="text-3xl font-bold tracking-tight text-secondary">Платформа обучения</h1>
+          <p className="text-muted-foreground mt-2">Корпоративная система обучения</p>
         </div>
 
         <Tabs defaultValue="login" className="w-full">
@@ -252,7 +252,7 @@ export default function AuthPage() {
                     <Input
                       id="email"
                       type="email"
-                      placeholder="ivanov.i.i@rzd.ru"
+                      placeholder="ivanov.i.i@company.ru"
                       required
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
@@ -328,7 +328,7 @@ export default function AuthPage() {
         </Tabs>
 
         <p className="mt-8 text-center text-xs text-muted-foreground">
-          &copy; 2024 ОАО «РЖД». Все права защищены.
+          &copy; 2026 Корпоративная платформа обучения.
         </p>
       </div>
     </div>

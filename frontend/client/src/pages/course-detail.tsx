@@ -24,6 +24,16 @@ function formatDate(value?: string | null) {
   return date.toLocaleDateString("ru-RU");
 }
 
+function formatCalendarDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function assignmentLabel(status?: string | null) {
   if (!status) return "Не назначен";
   if (status === "ASSIGNED") return "Назначен";
@@ -35,6 +45,8 @@ function assignmentLabel(status?: string | null) {
 
 function assignmentProgress(status?: string | null) {
   if (status === "COMPLETED") return 100;
+  if (status === "IN_PROGRESS") return 50;
+  if (status === "ASSIGNED") return 10;
   if (status === "OVERDUE") return 0;
   return 0;
 }
@@ -96,6 +108,10 @@ export default function CourseDetail() {
     ?? assignmentProgress(assignment?.status);
   const isStarted = progress > 0 || assignment?.status === "IN_PROGRESS" || assignment?.status === "COMPLETED";
   const isCompleted = progress >= 100 || assignment?.status === "COMPLETED";
+  const calendarDate = formatCalendarDate(assignment?.dueDate ?? course.startDate ?? course.endDate);
+  const calendarHref = calendarDate
+    ? `/calendar?date=${calendarDate}&courseId=${course.id}`
+    : `/calendar?courseId=${course.id}`;
 
   return (
     <Layout>
@@ -204,9 +220,11 @@ export default function CourseDetail() {
                       Чат доступен после назначения
                     </Button>
                   )}
-                  <Button variant="outline" disabled className="inline-flex items-center gap-2">
-                    <CalendarPlus className="h-4 w-4" />
-                    Добавить в календарь
+                  <Button variant="outline" asChild className="inline-flex items-center gap-2">
+                    <Link href={calendarHref}>
+                      <CalendarPlus className="h-4 w-4" />
+                      Перейти в календарь
+                    </Link>
                   </Button>
                 </div>
               </CardContent>

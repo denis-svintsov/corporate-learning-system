@@ -47,4 +47,16 @@ public class ProgressController {
         }
         return progressService.getUserProgress(userId);
     }
+
+    @PostMapping("/users/bulk")
+    public List<ProgressSummaryDto> users(
+            @RequestBody List<String> userIds,
+            @RequestHeader(name = "X-Roles", required = false) String rolesHeader
+    ) {
+        Set<String> roles = SecurityHeaders.parseRoles(rolesHeader);
+        if (!roles.contains("HR") && !roles.contains("ADMIN") && !roles.contains("MANAGER") && !roles.contains("TECHNOLOG")) {
+            throw new IllegalArgumentException("Access denied (analytics roles only)");
+        }
+        return progressService.getUsersProgress(userIds);
+    }
 }

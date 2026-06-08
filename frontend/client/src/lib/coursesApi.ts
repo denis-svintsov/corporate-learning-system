@@ -25,6 +25,48 @@ export interface CourseDto {
   endDate?: string | null;
 }
 
+export type AttendanceStatus = "PRESENT" | "ABSENT" | "EXCUSED";
+
+export interface CourseParticipantDto {
+  userId: string;
+  assignmentId: string;
+  assignmentStatus?: string | null;
+  dueDate?: string | null;
+  assignedAt?: string | null;
+}
+
+export interface AttendanceDto {
+  id: string;
+  courseId: string;
+  userId: string;
+  attendanceDate: string;
+  status: AttendanceStatus;
+  comment?: string | null;
+  markedBy: string;
+  updatedAt?: string | null;
+}
+
+export type CoursePayload = {
+  title: string;
+  description?: string;
+  categoryId?: string | null;
+  difficulty: DifficultyLevel;
+  durationMinutes?: number | null;
+  status?: CourseStatus;
+  tagIds?: string[];
+  allowedRoles?: string[];
+  allowedDepartmentIds?: string[];
+  specializations?: string[];
+  instructions?: string | null;
+  aggregatorUrl?: string | null;
+  coverUrl?: string | null;
+  companyCost?: number | null;
+  partnerName?: string | null;
+  partnerLocation?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+};
+
 export interface Page<T> {
   content: T[];
   totalElements: number;
@@ -140,6 +182,56 @@ export async function fetchCourses(params?: {
   return fetchJson<Page<CourseDto>>(url);
 }
 
+export async function fetchManagedCourses(params?: {
+  q?: string;
+  difficulty?: DifficultyLevel;
+  status?: CourseStatus;
+  page?: number;
+  size?: number;
+}): Promise<Page<CourseDto>> {
+  const url = buildUrl("/courses/manage", params);
+  return fetchJson<Page<CourseDto>>(url);
+}
+
+export async function createCourse(payload: CoursePayload): Promise<CourseDto> {
+  return fetchJson<CourseDto>(buildUrl("/courses"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function uploadCourseCover(file: File): Promise<{ objectKey: string; coverUrl: string }> {
+  const token = localStorage.getItem("auth_token");
+  const formData = new FormData();
+  formData.append("file", file);
+  const headers = new Headers();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const res = await fetch(buildUrl("/courses/covers"), {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  if (!res.ok) {
+    throw new Error(await extractApiErrorMessage(res));
+  }
+  const data = (await res.json()) as { objectKey: string; coverUrl: string };
+  return {
+    ...data,
+    coverUrl: new URL(data.coverUrl, COURSES_API_URL).toString(),
+  };
+}
+
+export async function updateCourse(id: string, payload: CoursePayload & { status: CourseStatus }): Promise<CourseDto> {
+  return fetchJson<CourseDto>(buildUrl(`/courses/${id}`), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function fetchRecommendedCourses(params?: {
   page?: number;
   size?: number;
@@ -154,6 +246,35 @@ export async function fetchCourse(id: string): Promise<CourseDto> {
 
 export async function fetchAssignedCourses(): Promise<AssignedCourseDto[]> {
   return fetchJson<AssignedCourseDto[]>(buildUrl("/courses/assigned-courses/my"));
+}
+
+export async function fetchCourseParticipants(courseId: string): Promise<CourseParticipantDto[]> {
+  return fetchJson<CourseParticipantDto[]>(buildUrl(`/courses/${courseId}/participants`));
+}
+
+export async function fetchCourseAttendance(courseId: string, date: string): Promise<AttendanceDto[]> {
+  return fetchJson<AttendanceDto[]>(buildUrl(`/courses/${courseId}/attendance`, { date }));
+}
+
+export async function markCourseAttendance(courseId: string, request: {
+  userId: string;
+  attendanceDate: string;
+  status: AttendanceStatus;
+  comment?: string;
+}): Promise<AttendanceDto> {
+  return fetchJson<AttendanceDto>(buildUrl(`/courses/${courseId}/attendance`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+}
+
+export async function confirmCourseCompletion(courseId: string, userId: string): Promise<AssignedCourseDto> {
+  return fetchJson<AssignedCourseDto>(buildUrl(`/courses/${courseId}/complete`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
+  });
 }
 
 export async function assignCourse(request: {

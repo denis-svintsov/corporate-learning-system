@@ -36,9 +36,8 @@ public class Certificate {
     @Column(name = "certificate_url", nullable = false)
     private String certificateUrl;
 
-    @Lob
-    @Column(name = "pdf_bytes", nullable = false, columnDefinition = "bytea")
-    private byte[] pdfBytes;
+    @Column(name = "object_key")
+    private String objectKey;
 
     @Column(name = "hash", nullable = false, unique = true)
     private String hash;

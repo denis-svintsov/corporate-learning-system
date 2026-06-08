@@ -7,6 +7,16 @@ import java.util.stream.Collectors;
 public final class SecurityHeaders {
     private SecurityHeaders() {}
 
+    public static boolean hasAnyRole(Set<String> roles, String... allowedRoles) {
+        if (roles == null || roles.isEmpty()) return false;
+        for (String role : allowedRoles) {
+            if (roles.contains(role)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static Set<String> parseRoles(String rolesHeader) {
         if (rolesHeader == null || rolesHeader.isBlank()) return Set.of();
         return Arrays.stream(rolesHeader.split(","))
@@ -16,4 +26,3 @@ public final class SecurityHeaders {
                 .collect(Collectors.toSet());
     }
 }
-

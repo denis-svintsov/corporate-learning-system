@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.courses.dto.AssignmentRequestDecisionRequest;
 import org.example.courses.dto.AssignmentRequestDto;
 import org.example.courses.dto.AssignmentPolicyDto;
+import org.example.courses.dto.ConfirmCourseCompletionRequest;
 import org.example.courses.dto.CourseAssignmentDto;
 import org.example.courses.dto.CourseAssignmentRequest;
 import org.example.courses.dto.SubmitAssignmentRequest;
@@ -13,6 +14,7 @@ import org.example.courses.model.AssignmentRequestStatus;
 import org.example.courses.model.CourseAssignment;
 import org.example.courses.service.AssignmentService;
 import org.example.courses.util.CsvUtil;
+import org.example.courses.util.SecurityHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.*;
@@ -32,7 +34,11 @@ public class AssignmentsController {
      * POST /courses/assign (по ТЗ)
      */
     @PostMapping("/courses/assign")
-    public CourseAssignment assign(@Valid @RequestBody CourseAssignmentRequest req) {
+    public CourseAssignment assign(
+            @Valid @RequestBody CourseAssignmentRequest req,
+            @RequestHeader(name = "X-User-Roles", required = false) String rolesHeader
+    ) {
+        requireAdminOrHr(parseRoles(rolesHeader));
         try {
             return assignmentService.assign(req);
         } catch (IllegalStateException ex) {
@@ -88,6 +94,14 @@ public class AssignmentsController {
         return assignmentService.getAssignmentPolicy();
     }
 
+    @GetMapping("/internal/courses/{courseId}/assignments/{userId}/exists")
+    public boolean hasAssignment(
+            @PathVariable String courseId,
+            @PathVariable String userId
+    ) {
+        return assignmentService.hasAssignment(userId, courseId);
+    }
+
     @PutMapping("/courses/assignment-policy")
     public AssignmentPolicyDto updateAssignmentPolicy(
             @Valid @RequestBody UpdateAssignmentPolicyRequest req,
@@ -133,6 +147,24 @@ public class AssignmentsController {
         }
     }
 
+    @PostMapping("/courses/{courseId}/complete")
+    public CourseAssignmentDto confirmCompletion(
+            @PathVariable String courseId,
+            @Valid @RequestBody ConfirmCourseCompletionRequest request,
+            @RequestHeader(name = "X-User-Id", required = false) String reviewerId,
+            @RequestHeader(name = "X-User-Roles", required = false) String rolesHeader
+    ) {
+        if (reviewerId == null || reviewerId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing X-User-Id");
+        }
+        Set<String> roles = SecurityHeaders.parseRoles(rolesHeader);
+        if (!SecurityHeaders.hasAnyRole(roles, "ADMIN", "HR", "TECHNOLOG", "EXPERT")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        CourseAssignment assignment = assignmentService.confirmCompletion(courseId, request.userId(), reviewerId);
+        return toDto(assignment);
+    }
+
     /**
      * GET /users/{userId}/assigned-courses (по ТЗ)
      */
@@ -155,29 +187,33 @@ public class AssignmentsController {
 
     private List<CourseAssignmentDto> toDtoList(String userId) {
         return assignmentService.getAssignedCourses(userId).stream()
-                .map(a -> new CourseAssignmentDto(
-                        a.getId(),
-                        a.getUserId(),
-                        a.getCourse() != null ? a.getCourse().getId() : null,
-                        a.getCourse() != null ? a.getCourse().getTitle() : null,
-                        a.getCourse() != null ? a.getCourse().getDescription() : null,
-                        a.getCourse() != null && a.getCourse().getCategory() != null ? a.getCourse().getCategory().getId() : null,
-                        a.getCourse() != null ? a.getCourse().getDifficulty() : null,
-                        a.getCourse() != null ? a.getCourse().getDurationMinutes() : null,
-                        a.getCourse() != null ? a.getCourse().getStatus() : null,
-                        a.getCourse() != null ? a.getCourse().getCoverUrl() : null,
-                        a.getCourse() != null ? a.getCourse().getAggregatorUrl() : null,
-                        a.getCourse() != null ? a.getCourse().getInstructions() : null,
-                        a.getCourse() != null ? CsvUtil.splitToSet(a.getCourse().getSpecializationsCsv()) : java.util.Set.of(),
-                        a.getCourse() != null ? a.getCourse().getCompanyCost() : null,
-                        a.getCourse() != null ? a.getCourse().getStartDate() : null,
-                        a.getCourse() != null ? a.getCourse().getEndDate() : null,
-                        a.getAssignedBy(),
-                        a.getDueDate(),
-                        a.getStatus(),
-                        a.getCreatedAt()
-                ))
+                .map(this::toDto)
                 .toList();
+    }
+
+    private CourseAssignmentDto toDto(CourseAssignment a) {
+        return new CourseAssignmentDto(
+                a.getId(),
+                a.getUserId(),
+                a.getCourse() != null ? a.getCourse().getId() : null,
+                a.getCourse() != null ? a.getCourse().getTitle() : null,
+                a.getCourse() != null ? a.getCourse().getDescription() : null,
+                a.getCourse() != null && a.getCourse().getCategory() != null ? a.getCourse().getCategory().getId() : null,
+                a.getCourse() != null ? a.getCourse().getDifficulty() : null,
+                a.getCourse() != null ? a.getCourse().getDurationMinutes() : null,
+                a.getCourse() != null ? a.getCourse().getStatus() : null,
+                a.getCourse() != null ? a.getCourse().getCoverUrl() : null,
+                a.getCourse() != null ? a.getCourse().getAggregatorUrl() : null,
+                a.getCourse() != null ? a.getCourse().getInstructions() : null,
+                a.getCourse() != null ? CsvUtil.splitToSet(a.getCourse().getSpecializationsCsv()) : java.util.Set.of(),
+                a.getCourse() != null ? a.getCourse().getCompanyCost() : null,
+                a.getCourse() != null ? a.getCourse().getStartDate() : null,
+                a.getCourse() != null ? a.getCourse().getEndDate() : null,
+                a.getAssignedBy(),
+                a.getDueDate(),
+                a.getStatus(),
+                a.getCreatedAt()
+        );
     }
 
     private Set<String> parseRoles(String rolesHeader) {

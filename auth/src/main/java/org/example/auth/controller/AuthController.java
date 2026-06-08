@@ -15,9 +15,12 @@ import org.example.auth.users.UsersServiceClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -132,15 +135,25 @@ public class AuthController {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(Map.of("error", "User not found"));
             }
-            var userContext = usersServiceClient.getUserContext(user.getId());
-            var roles = userContext == null || userContext.roles() == null
-                    ? java.util.List.of("USER")
-                    : userContext.roles().stream().map(String::toUpperCase).toList();
+            var roles = resolveRoles(user.getId(), token);
             return ResponseEntity.ok(new AuthValidationResponse(user.getId(), user.getUsername(), roles));
         } catch (Exception ex) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "Token validation failed"));
         }
+    }
+
+    private List<String> resolveRoles(String userId, String token) {
+        Set<String> tokenRoles = jwtService.extractRoles(token);
+        try {
+            var userContext = usersServiceClient.getUserContext(userId);
+            if (userContext != null && userContext.roles() != null && !userContext.roles().isEmpty()) {
+                return userContext.roles().stream().map(String::toUpperCase).toList();
+            }
+        } catch (RestClientException ex) {
+            return tokenRoles.stream().toList();
+        }
+        return tokenRoles.stream().toList();
     }
 
     @GetMapping("/health")
