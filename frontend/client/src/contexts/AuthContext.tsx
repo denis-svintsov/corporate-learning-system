@@ -1,11 +1,12 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
+import { extractApiErrorMessage } from "@/lib/apiError";
 
 interface User {
   id: string;
   username: string;
   email: string;
-  specialization?: string | null;
+  positionId?: string | null;
   roles: string[];
 }
 
@@ -14,7 +15,6 @@ interface AuthContextType {
   token: string | null;
   login: (username: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
-  updateSpecialization: (specialization: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -28,7 +28,6 @@ interface RegisterData {
   lastName: string;
   positionId?: string;
   departmentId?: string;
-  specialization?: string;
   hireDate?: string;
 }
 
@@ -67,6 +66,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setToken(null);
+      setUser(null);
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+      setLocation("/auth");
+    };
+
+    window.addEventListener("auth:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("auth:unauthorized", handleUnauthorized);
+  }, [setLocation]);
+
   const login = async (username: string, password: string) => {
     try {
       const response = await fetch(`${AUTH_API_URL}/login`, {
@@ -78,14 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        let errorMessage = "Неверный логин или пароль";
-        try {
-          const error = await response.json();
-          errorMessage = error.message || error.error || errorMessage;
-        } catch {
-          // Если не удалось распарсить JSON, используем дефолтное сообщение
-        }
-        throw new Error(errorMessage);
+        throw new Error(await extractApiErrorMessage(response, "Неверный логин или пароль"));
       }
 
       const data = await response.json();
@@ -93,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: data.userId,
         username: data.username,
         email: data.email,
-        specialization: data.specialization ?? null,
+        positionId: data.positionId ?? null,
         roles: data.roles || [],
       };
 
@@ -118,20 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        let errorMessage = "Ошибка при регистрации";
-        try {
-          const error = await response.json();
-          // Если это объект с полями валидации
-          if (typeof error === 'object' && !error.message) {
-            const errors = Object.values(error).join(', ');
-            errorMessage = errors || errorMessage;
-          } else {
-            errorMessage = error.message || error.error || errorMessage;
-          }
-        } catch {
-          // Если не удалось распарсить JSON, используем дефолтное сообщение
-        }
-        throw new Error(errorMessage);
+        throw new Error(await extractApiErrorMessage(response, "Ошибка при регистрации"));
       }
 
       const responseData = await response.json();
@@ -139,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: responseData.userId,
         username: responseData.username,
         email: responseData.email,
-        specialization: responseData.specialization ?? null,
+        positionId: responseData.positionId ?? null,
         roles: responseData.roles || [],
       };
 
@@ -176,33 +168,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLocation("/auth");
   };
 
-  const updateSpecialization = async (specialization: string) => {
-    if (!token) {
-      throw new Error("Пользователь не авторизован");
-    }
-    const response = await fetch(`${AUTH_API_URL}/me/specialization`, {
-      method: "PUT",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ specialization }),
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || "Ошибка обновления специализации");
-    }
-    const updated = await response.json();
-    const currentUser = user;
-    if (!currentUser) return;
-    const nextUser: User = {
-      ...currentUser,
-      specialization: updated.specialization ?? specialization,
-    };
-    setUser(nextUser);
-    localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -210,7 +175,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         login,
         register,
-        updateSpecialization,
         logout,
         isAuthenticated: !!token && !!user,
         isLoading,

@@ -10,11 +10,19 @@ import Dashboard from "@/pages/dashboard";
 import CoursesCatalog from "@/pages/courses-catalog";
 import CourseSelection from "@/pages/course-selection";
 import AdminApproval from "@/pages/admin-approval";
+import CourseManagementPage from "@/pages/course-management";
+import CourseLeadingPage from "@/pages/course-leading";
 import Certificates from "@/pages/certificates";
 import Chat from "@/pages/chat";
 import CalendarPage from "@/pages/calendar";
 import AuthPage from "@/pages/auth";
 import CourseDetail from "@/pages/course-detail";
+import AnalyticsPage from "@/pages/analytics";
+import NotificationsPage from "@/pages/notifications";
+import CabinetProfilePage from "@/pages/cabinet-profile";
+import CabinetProgressPage from "@/pages/cabinet-progress";
+import CabinetHistoryPage from "@/pages/cabinet-history";
+import CabinetSettingsPage from "@/pages/cabinet-settings";
 
 function Router() {
   return (
@@ -40,6 +48,16 @@ function Router() {
           <AdminApproval />
         </ProtectedRoute>
       </Route>
+      <Route path="/admin/courses">
+        <ProtectedRoute>
+          <CourseManagementPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/teaching">
+        <ProtectedRoute>
+          <CourseLeadingPage />
+        </ProtectedRoute>
+      </Route>
       <Route path="/certificates">
         <ProtectedRoute>
           <Certificates />
@@ -55,9 +73,44 @@ function Router() {
           <CalendarPage />
         </ProtectedRoute>
       </Route>
+      <Route path="/analytics">
+        <ProtectedRoute>
+          <AnalyticsPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/notifications">
+        <ProtectedRoute>
+          <NotificationsPage />
+        </ProtectedRoute>
+      </Route>
       <Route path="/course/:id">
         <ProtectedRoute>
           <CourseDetail />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/cabinet">
+        <ProtectedRoute>
+          <CabinetProfilePage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/cabinet/profile">
+        <ProtectedRoute>
+          <CabinetProfilePage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/cabinet/progress">
+        <ProtectedRoute>
+          <CabinetProgressPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/cabinet/history">
+        <ProtectedRoute>
+          <CabinetHistoryPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/cabinet/settings">
+        <ProtectedRoute>
+          <CabinetSettingsPage />
         </ProtectedRoute>
       </Route>
       <Route component={NotFound} />

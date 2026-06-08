@@ -13,6 +13,6 @@ public class AuthResponse {
     private String type = "Bearer";
     private String username;
     private String email;
-    private String specialization;
+    private String positionId;
     private java.util.Set<String> roles;
 }

@@ -1,10 +1,11 @@
--- Создание схемы БД для системы управления обучением РЖД-Академия
+-- Создание схемы БД для системы корпоративного обучения
 -- Разделение на схемы: auth и users
 
 -- Создание схем
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS users;
 CREATE SCHEMA IF NOT EXISTS courses;
+CREATE SCHEMA IF NOT EXISTS communication;
 
 -- ============================================
 -- СХЕМА USERS
@@ -214,6 +215,10 @@ CREATE TABLE IF NOT EXISTS courses.course (
     aggregator_url TEXT,
     cover_url TEXT,
     company_cost NUMERIC(12,2),
+    partner_name VARCHAR(255),
+    partner_location VARCHAR(255),
+    start_date DATE,
+    end_date DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_course_category FOREIGN KEY (category_id) REFERENCES courses.category(id) ON DELETE SET NULL
@@ -225,6 +230,10 @@ ALTER TABLE courses.course ADD COLUMN IF NOT EXISTS instructions TEXT;
 ALTER TABLE courses.course ADD COLUMN IF NOT EXISTS aggregator_url TEXT;
 ALTER TABLE courses.course ADD COLUMN IF NOT EXISTS cover_url TEXT;
 ALTER TABLE courses.course ADD COLUMN IF NOT EXISTS company_cost NUMERIC(12,2);
+ALTER TABLE courses.course ADD COLUMN IF NOT EXISTS partner_name VARCHAR(255);
+ALTER TABLE courses.course ADD COLUMN IF NOT EXISTS partner_location VARCHAR(255);
+ALTER TABLE courses.course ADD COLUMN IF NOT EXISTS start_date DATE;
+ALTER TABLE courses.course ADD COLUMN IF NOT EXISTS end_date DATE;
 
 -- Таблица связей курс-тег
 CREATE TABLE IF NOT EXISTS courses.course_tag (
@@ -291,6 +300,38 @@ CREATE TABLE IF NOT EXISTS courses.course_assignment (
 CREATE INDEX IF NOT EXISTS idx_course_assignment_user ON courses.course_assignment(user_id);
 CREATE INDEX IF NOT EXISTS idx_course_assignment_course ON courses.course_assignment(course_id);
 
+-- Заявки на назначение курсов (модерация HR/Admin)
+CREATE TABLE IF NOT EXISTS courses.course_assignment_request (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    user_id VARCHAR(36) NOT NULL,
+    course_id VARCHAR(36) NOT NULL,
+    requested_by VARCHAR(36) NOT NULL,
+    comment TEXT,
+    due_date DATE,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    reviewed_by VARCHAR(36),
+    reviewer_comment TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at TIMESTAMP,
+    CONSTRAINT fk_course_assignment_request_user FOREIGN KEY (user_id) REFERENCES users.users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_course_assignment_request_course FOREIGN KEY (course_id) REFERENCES courses.course(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_assignment_request_user ON courses.course_assignment_request(user_id);
+CREATE INDEX IF NOT EXISTS idx_course_assignment_request_status ON courses.course_assignment_request(status);
+CREATE INDEX IF NOT EXISTS idx_course_assignment_request_created_at ON courses.course_assignment_request(created_at DESC);
+
+-- Политика лимитов назначения курсов
+CREATE TABLE IF NOT EXISTS courses.assignment_policy (
+    id INTEGER PRIMARY KEY,
+    max_courses_per_quarter INTEGER NOT NULL DEFAULT 3,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO courses.assignment_policy (id, max_courses_per_quarter)
+VALUES (1, 3)
+ON CONFLICT (id) DO NOTHING;
+
 -- Прогресс по урокам
 CREATE TABLE IF NOT EXISTS courses.user_progress (
     id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -350,3 +391,54 @@ CREATE TABLE IF NOT EXISTS courses.learning_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_learning_history_user_time ON courses.learning_history(user_id, "timestamp");
+
+-- ============================================
+-- СХЕМА COMMUNICATION
+-- ============================================
+
+-- Чат-комнаты
+CREATE TABLE IF NOT EXISTS communication.chat_room (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    course_id VARCHAR(36),
+    name VARCHAR(255) NOT NULL,
+    type VARCHAR(30) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_chat_room_course FOREIGN KEY (course_id) REFERENCES courses.course(id) ON DELETE SET NULL
+);
+
+-- Для course-room допускаем только одну комнату на курс
+CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_room_course_unique
+    ON communication.chat_room(course_id)
+    WHERE course_id IS NOT NULL AND type = 'COURSE';
+
+CREATE INDEX IF NOT EXISTS idx_chat_room_updated_at ON communication.chat_room(updated_at DESC);
+
+-- Участники чата
+CREATE TABLE IF NOT EXISTS communication.chat_participant (
+    user_id VARCHAR(36) NOT NULL,
+    room_id VARCHAR(36) NOT NULL,
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    role VARCHAR(30) NOT NULL DEFAULT 'PARTICIPANT',
+    PRIMARY KEY (user_id, room_id),
+    CONSTRAINT fk_chat_participant_room FOREIGN KEY (room_id) REFERENCES communication.chat_room(id) ON DELETE CASCADE,
+    CONSTRAINT fk_chat_participant_user FOREIGN KEY (user_id) REFERENCES users.users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_participant_user ON communication.chat_participant(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_participant_room ON communication.chat_participant(room_id);
+
+-- Сообщения
+CREATE TABLE IF NOT EXISTS communication.chat_message (
+    id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    room_id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    content TEXT NOT NULL,
+    "timestamp" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    message_type VARCHAR(30) NOT NULL DEFAULT 'TEXT',
+    attachments_json TEXT,
+    CONSTRAINT fk_chat_message_room FOREIGN KEY (room_id) REFERENCES communication.chat_room(id) ON DELETE CASCADE,
+    CONSTRAINT fk_chat_message_user FOREIGN KEY (user_id) REFERENCES users.users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_message_room_time ON communication.chat_message(room_id, "timestamp" DESC);

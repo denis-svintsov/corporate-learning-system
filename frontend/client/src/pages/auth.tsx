@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Train, ArrowRight } from "lucide-react";
+import { Building2, ArrowRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { extractApiErrorMessage } from "@/lib/apiError";
 
 interface Department {
   departmentId: string;
@@ -49,7 +50,6 @@ export default function AuthPage() {
   const [regPositionId, setRegPositionId] = useState("");
   const [regDepartmentId, setRegDepartmentId] = useState("");
   const [regHireDate, setRegHireDate] = useState("");
-  const [regSpecialization, setRegSpecialization] = useState("");
   const authBaseUrl =
     import.meta.env.VITE_AUTH_API_URL ?? "http://localhost:8080/auth";
 
@@ -71,6 +71,11 @@ export default function AuthPage() {
           const posData = await posRes.json();
           setPositions(posData);
         }
+        if (!deptRes.ok || !posRes.ok) {
+          const deptMsg = !deptRes.ok ? await extractApiErrorMessage(deptRes, "Не удалось загрузить департаменты") : "";
+          const posMsg = !posRes.ok ? await extractApiErrorMessage(posRes, "Не удалось загрузить должности") : "";
+          console.error("Ошибка загрузки данных:", [deptMsg, posMsg].filter(Boolean).join("; "));
+        }
       } catch (error) {
         console.error("Ошибка загрузки данных:", error);
       } finally {
@@ -89,7 +94,7 @@ export default function AuthPage() {
       await login(loginUsername, loginPassword);
       toast({
         title: "Успешный вход",
-        description: "Добро пожаловать в систему СДО",
+        description: "Добро пожаловать в систему обучения",
       });
     } catch (error: any) {
       toast({
@@ -115,12 +120,11 @@ export default function AuthPage() {
         lastName: regLastName,
         positionId: regPositionId || undefined,
         departmentId: regDepartmentId || undefined,
-        specialization: regSpecialization || undefined,
         hireDate: regHireDate || undefined,
       });
       toast({
         title: "Регистрация успешна",
-        description: "Добро пожаловать в систему СДО",
+        description: "Добро пожаловать в систему обучения",
       });
     } catch (error: any) {
       toast({
@@ -144,10 +148,10 @@ export default function AuthPage() {
       <div className="z-10 w-full max-w-md px-4">
         <div className="flex flex-col items-center mb-8 text-center">
           <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-            <Train className="h-8 w-8 text-primary" />
+            <Building2 className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-secondary">СДО</h1>
-          <p className="text-muted-foreground mt-2">Система Дистанционного Обучения</p>
+          <h1 className="text-3xl font-bold tracking-tight text-secondary">Платформа обучения</h1>
+          <p className="text-muted-foreground mt-2">Корпоративная система обучения</p>
         </div>
 
         <Tabs defaultValue="login" className="w-full">
@@ -248,7 +252,7 @@ export default function AuthPage() {
                     <Input
                       id="email"
                       type="email"
-                      placeholder="ivanov.i.i@rzd.ru"
+                      placeholder="ivanov.i.i@company.ru"
                       required
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
@@ -264,23 +268,6 @@ export default function AuthPage() {
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="specialization">Специализация</Label>
-                    <Select
-                      value={regSpecialization}
-                      onValueChange={setRegSpecialization}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Выберите специализацию" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Software Engineering">Разработка ПО</SelectItem>
-                        <SelectItem value="Project Management">Управление проектами</SelectItem>
-                        <SelectItem value="Data Analytics">Аналитика данных</SelectItem>
-                        <SelectItem value="Information Security">Информационная безопасность</SelectItem>
-                      </SelectContent>
-                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="department">Департамент</Label>
@@ -341,7 +328,7 @@ export default function AuthPage() {
         </Tabs>
 
         <p className="mt-8 text-center text-xs text-muted-foreground">
-          &copy; 2024 ОАО «РЖД». Все права защищены.
+          &copy; 2026 Корпоративная платформа обучения.
         </p>
       </div>
     </div>

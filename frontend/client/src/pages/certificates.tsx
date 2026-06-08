@@ -2,7 +2,7 @@ import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Upload, Search, FileText, Calendar } from "lucide-react";
+import { Search, FileText, Calendar } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { downloadCertificate, fetchCourse, fetchMyCertificates } from "@/lib/coursesApi";
@@ -12,11 +12,14 @@ import { useToast } from "@/hooks/use-toast";
 export default function Certificates() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [search, setSearch] = useState("");
   const [courseTitles, setCourseTitles] = useState<Record<string, string>>({});
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["certificates", user?.id],
     queryFn: () => fetchMyCertificates(user!.id),
     enabled: !!user?.id,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const certificates = data ?? [];
@@ -53,14 +56,15 @@ export default function Certificates() {
     };
   }, [certificates, courseTitles]);
 
-  const handleDownload = async (id: string) => {
+  const handleDownload = async (id: string, title: string) => {
     if (!user?.id) return;
     try {
       const blob = await downloadCertificate(id, user.id);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `certificate-${id}.pdf`;
+      const safeTitle = title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "Сертификат";
+      link.download = `${safeTitle}.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -74,15 +78,21 @@ export default function Certificates() {
     }
   };
 
-  const formattedCertificates = useMemo(
-    () =>
-      certificates.map((cert) => ({
+  const formattedCertificates = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return certificates
+      .map((cert) => ({
         ...cert,
-        title: courseTitles[cert.courseId] ?? cert.courseId,
+        title: courseTitles[cert.courseId] ?? "Название курса загружается...",
         issueDate: cert.issueDate ? new Date(cert.issueDate) : null,
-      })),
-    [certificates, courseTitles],
-  );
+      }))
+      .filter((cert) => !term || cert.title.toLowerCase().includes(term))
+      .sort((a, b) => {
+        const left = a.issueDate?.getTime() ?? 0;
+        const right = b.issueDate?.getTime() ?? 0;
+        return right - left;
+      });
+  }, [certificates, courseTitles, search]);
 
   return (
     <Layout>
@@ -90,11 +100,8 @@ export default function Certificates() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-secondary">Мои сертификаты</h1>
-            <p className="text-muted-foreground">Загружайте и просматривайте полученные сертификаты</p>
+            <p className="text-muted-foreground">Просматривайте и скачивайте полученные сертификаты</p>
           </div>
-          <Button>
-            <Upload className="mr-2 h-4 w-4" /> Загрузить сертификат
-          </Button>
         </div>
 
         <div className="flex items-center gap-4">
@@ -104,6 +111,8 @@ export default function Certificates() {
                 type="search"
                 placeholder="Поиск по названию..."
                 className="pl-9"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
               />
             </div>
         </div>
@@ -132,7 +141,6 @@ export default function Certificates() {
               </div>
               <CardContent className="p-4">
                 <h3 className="font-semibold line-clamp-1">{cert.title}</h3>
-                <p className="text-sm text-muted-foreground">ID курса: {cert.courseId}</p>
                 <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
@@ -142,7 +150,7 @@ export default function Certificates() {
                 <Button
                   variant="outline"
                   className="w-full mt-4 h-8 text-xs"
-                  onClick={() => handleDownload(cert.id)}
+                  onClick={() => handleDownload(cert.id, cert.title)}
                 >
                   Скачать PDF
                 </Button>

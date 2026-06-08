@@ -27,11 +27,15 @@ public class CourseMapper {
                 tagIds,
                 CsvUtil.splitToSet(course.getAllowedRolesCsv()),
                 CsvUtil.splitToSet(course.getAllowedDepartmentIdsCsv()),
-                course.getSpecialization(),
+                CsvUtil.splitToSet(course.getSpecializationsCsv()),
                 course.getInstructions(),
                 course.getAggregatorUrl(),
                 course.getCoverUrl(),
-                course.getCompanyCost()
+                course.getCompanyCost(),
+                course.getPartnerName(),
+                course.getPartnerLocation(),
+                course.getStartDate(),
+                course.getEndDate()
         );
     }
 }

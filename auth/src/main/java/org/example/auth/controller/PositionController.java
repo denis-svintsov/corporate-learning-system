@@ -1,25 +1,24 @@
 package org.example.auth.controller;
 
-import org.example.auth.model.Position;
-import org.example.auth.repository.PositionRepository;
+import org.example.auth.users.UsersServiceClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping({"/api/positions", "/api/auth/positions"})
 @CrossOrigin(origins = "*")
 public class PositionController {
-    private final PositionRepository positionRepository;
+    private final UsersServiceClient usersServiceClient;
 
-    public PositionController(PositionRepository positionRepository) {
-        this.positionRepository = positionRepository;
+    public PositionController(UsersServiceClient usersServiceClient) {
+        this.usersServiceClient = usersServiceClient;
     }
 
     @GetMapping
-    public ResponseEntity<List<Position>> getAllPositions() {
-        return ResponseEntity.ok(positionRepository.findAll());
+    public ResponseEntity<List<Map<String, Object>>> getAllPositions() {
+        return ResponseEntity.ok(usersServiceClient.getPositions());
     }
 }
-

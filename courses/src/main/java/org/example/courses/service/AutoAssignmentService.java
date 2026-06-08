@@ -5,7 +5,7 @@ import org.example.courses.dto.CourseAssignmentRequest;
 import org.example.courses.model.CourseStatus;
 import org.example.courses.repository.CourseAssignmentRepository;
 import org.example.courses.repository.CourseRepository;
-import org.example.courses.users.UserAccountRepository;
+import org.example.courses.users.UsersServiceClient;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -24,14 +24,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AutoAssignmentService {
 
-    private final UserAccountRepository userAccountRepository;
+    private final UsersServiceClient usersServiceClient;
     private final CourseRepository courseRepository;
     private final CourseAssignmentRepository courseAssignmentRepository;
     private final AssignmentService assignmentService;
 
     @Scheduled(cron = "0 10 3 * * *") // каждый день в 03:10
     public void ensureThreeCoursesPerYear() {
-        var users = userAccountRepository.findByStatusIgnoreCase("active");
+        var users = usersServiceClient.getActiveUsers();
         var activeCourses = courseRepository.findByStatus(CourseStatus.ACTIVE);
         if (activeCourses.isEmpty()) return;
 
@@ -40,7 +40,7 @@ public class AutoAssignmentService {
 
         for (var user : users) {
             List<String> assignedThisYear = courseAssignmentRepository
-                    .findByUserIdAndCreatedAtBetween(user.getId(), startOfYear, startNextYear)
+                    .findByUserIdAndCreatedAtBetween(user.id(), startOfYear, startNextYear)
                     .stream()
                     .map(a -> a.getCourse().getId())
                     .toList();
@@ -57,9 +57,8 @@ public class AutoAssignmentService {
 
             for (int i = 0; i < Math.min(need, candidates.size()); i++) {
                 String courseId = candidates.get(i);
-                assignmentService.assign(new CourseAssignmentRequest(user.getId(), courseId, "SYSTEM", null));
+                assignmentService.assign(new CourseAssignmentRequest(user.id(), courseId, "SYSTEM", null));
             }
         }
     }
 }
-

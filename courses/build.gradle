@@ -30,6 +30,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'org.flywaydb:flyway-core'
 
     // PostgreSQL
     runtimeOnly 'org.postgresql:postgresql'
@@ -40,6 +41,9 @@ dependencies {
 
     // PDF generation (placeholder, can be replaced with a more advanced generator)
     implementation 'com.github.librepdf:openpdf:1.3.39'
+
+    // Object storage for generated certificates
+    implementation 'io.minio:minio:8.5.17'
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

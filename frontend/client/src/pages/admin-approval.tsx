@@ -4,182 +4,335 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Check, X, Eye, FileText, Download } from "lucide-react";
-import { COURSES } from "@/lib/mock-data";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { Check, X } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  approveAssignmentRequest,
+  AssignmentRequestDto,
+  AssignmentRequestStatus,
+  fetchAssignmentPolicy,
+  fetchAssignmentRequests,
+  rejectAssignmentRequest,
+  updateAssignmentPolicy,
+} from "@/lib/coursesApi";
+import { useEffect, useMemo, useState } from "react";
+import { fetchUserProfile } from "@/lib/usersApi";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
-// Mock requests data
-const REQUESTS = [
-  {
-    id: "r1",
-    user: {
-      name: "Петров Алексей",
-      department: "Отдел разработки",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex"
-    },
-    courses: [COURSES[0], COURSES[3], COURSES[5]], // Angular, Python, Security
-    totalCost: 195000,
-    status: "pending",
-    date: "2024-06-15",
-    comment: "Необходимо для нового проекта по миграции легаси систем."
-  },
-  {
-    id: "r2",
-    user: {
-      name: "Смирнова Елена",
-      department: "HR отдел",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Elena"
-    },
-    courses: [COURSES[4]], // Soft Skills
-    totalCost: 25000,
-    status: "approved",
-    date: "2024-06-14",
-    comment: "Повышение квалификации для работы с командой."
-  },
-  {
-    id: "r3",
-    user: {
-      name: "Сидоров Михаил",
-      department: "Аналитика",
-      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mike"
-    },
-    courses: [COURSES[2], COURSES[3]], // Analysis, Python
-    totalCost: 95000,
-    status: "rejected",
-    date: "2024-06-12",
-    comment: "Хочу изучить новые инструменты."
-  }
-];
+function statusBadge(status: AssignmentRequestStatus) {
+  if (status === "APPROVED") return <Badge className="bg-green-600">Утверждена</Badge>;
+  if (status === "REJECTED") return <Badge variant="destructive">Отклонена</Badge>;
+  return <Badge variant="secondary">Ожидает</Badge>;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString("ru-RU");
+}
+
+function durationLabel(minutes?: number | null) {
+  if (!minutes) return null;
+  const hours = Math.round((minutes / 60) * 10) / 10;
+  return `${hours} ч`;
+}
 
 export default function AdminApproval() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = (user?.roles ?? []).includes("ADMIN") || (user?.roles ?? []).includes("HR");
+  const [limitInput, setLimitInput] = useState<string>("3");
+
+  const { data: requests = [], isLoading, isError, error } = useQuery({
+    queryKey: ["assignment-requests-admin"],
+    queryFn: () => fetchAssignmentRequests(),
+    enabled: isAdmin,
+  });
+
+  const { data: assignmentPolicy, isLoading: isPolicyLoading } = useQuery({
+    queryKey: ["assignment-policy"],
+    queryFn: () => fetchAssignmentPolicy(),
+    enabled: isAdmin,
+  });
+
+  useEffect(() => {
+    if (assignmentPolicy?.maxCoursesPerQuarter) {
+      setLimitInput(String(assignmentPolicy.maxCoursesPerQuarter));
+    }
+  }, [assignmentPolicy?.maxCoursesPerQuarter]);
+
+  const userIds = useMemo(() => {
+    const ids = requests.map((r) => r.userId).filter(Boolean);
+    return Array.from(new Set(ids));
+  }, [requests]);
+
+  const { data: userNames = new Map<string, string>() } = useQuery({
+    queryKey: ["assignment-requests-users", userIds],
+    enabled: isAdmin && userIds.length > 0,
+    queryFn: async () => {
+      const settled = await Promise.allSettled(
+        userIds.map(async (id) => {
+          const profile = await fetchUserProfile(id);
+          const fullName = [profile.lastName, profile.firstName].filter(Boolean).join(" ").trim();
+          return [id, fullName || profile.email || id] as const;
+        }),
+      );
+      const map = new Map<string, string>();
+      settled.forEach((res) => {
+        if (res.status === "fulfilled") {
+          map.set(res.value[0], res.value[1]);
+        }
+      });
+      return map;
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (requestId: string) => approveAssignmentRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assignment-requests-admin"] });
+      queryClient.invalidateQueries({ queryKey: ["assigned-courses"] });
+    },
+    onError: (e) => {
+      toast({
+        title: "Ошибка утверждения",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (requestId: string) => rejectAssignmentRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assignment-requests-admin"] });
+    },
+    onError: (e) => {
+      toast({
+        title: "Ошибка отклонения",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updatePolicyMutation = useMutation({
+    mutationFn: (value: number) => updateAssignmentPolicy(value),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(["assignment-policy"], updated);
+      toast({
+        title: "Лимит обновлен",
+        description: `Теперь на сотрудника доступно ${updated.maxCoursesPerQuarter} курсов в квартал.`,
+      });
+    },
+    onError: (e) => {
+      toast({
+        title: "Ошибка обновления лимита",
+        description: (e as Error).message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const pending = requests.filter((r) => r.status === "PENDING");
+  const approved = requests.filter((r) => r.status === "APPROVED");
+  const rejected = requests.filter((r) => r.status === "REJECTED");
+
+  const renderRows = (rows: AssignmentRequestDto[], actions: boolean) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Сотрудник</TableHead>
+          <TableHead>Курс</TableHead>
+          <TableHead>Комментарий</TableHead>
+          <TableHead>Дата заявки</TableHead>
+          <TableHead>Статус</TableHead>
+          {actions && <TableHead className="text-right">Действия</TableHead>}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.length === 0 && (
+          <TableRow>
+            <TableCell colSpan={actions ? 6 : 5} className="text-center text-muted-foreground">
+              Нет заявок
+            </TableCell>
+          </TableRow>
+        )}
+        {rows.map((req) => (
+          <TableRow key={req.id}>
+            <TableCell>
+              <div className="flex items-center gap-3">
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback>{(userNames.get(req.userId) ?? req.userId).slice(0, 1).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="font-medium">{userNames.get(req.userId) ?? req.userId}</div>
+              </div>
+            </TableCell>
+            <TableCell>
+              <div className="space-y-2">
+                <div className="font-medium">{req.courseTitle ?? req.courseId}</div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  {req.courseDifficulty && <Badge variant="outline">{req.courseDifficulty}</Badge>}
+                  {durationLabel(req.courseDurationMinutes) && <Badge variant="outline">{durationLabel(req.courseDurationMinutes)}</Badge>}
+                  {req.courseId && (
+                    <a href={`/course/${req.courseId}`} className="underline underline-offset-2 hover:text-foreground">
+                      Открыть курс
+                    </a>
+                  )}
+                </div>
+              </div>
+            </TableCell>
+            <TableCell className="max-w-xs text-sm text-muted-foreground">
+              {req.comment || "-"}
+            </TableCell>
+            <TableCell>{formatDate(req.createdAt)}</TableCell>
+            <TableCell>{statusBadge(req.status)}</TableCell>
+            {actions && (
+              <TableCell className="text-right">
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                    onClick={() => approveMutation.mutate(req.id)}
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    disabled={approveMutation.isPending || rejectMutation.isPending}
+                    onClick={() => rejectMutation.mutate(req.id)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            )}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
+  if (!isAdmin) {
+    return (
+      <Layout>
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-sm text-destructive">
+          Доступ запрещен. Страница доступна только HR/Admin.
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-secondary">Панель администратора</h1>
-            <p className="text-muted-foreground">Управление заявками на обучение и бюджетом</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline">
-              <Download className="mr-2 h-4 w-4" /> Экспорт отчета
-            </Button>
-            <Button>Распределить бюджет</Button>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-secondary">Панель модерации назначений</h1>
+          <p className="text-muted-foreground">Заявки сотрудников на назначение курсов</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Новых заявок</CardTitle>
+              <CardTitle className="text-sm font-medium">Ожидают</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-500">12</div>
-              <p className="text-xs text-muted-foreground">Требуют рассмотрения</p>
+              <div className="text-2xl font-bold text-orange-500">{pending.length}</div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Утверждено (Q3)</CardTitle>
+              <CardTitle className="text-sm font-medium">Утверждено</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">45</div>
-              <p className="text-xs text-muted-foreground">Сотрудников начнут обучение</p>
+              <div className="text-2xl font-bold text-green-600">{approved.length}</div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Бюджет (Q3)</CardTitle>
+              <CardTitle className="text-sm font-medium">Отклонено</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">1.2M ₽</div>
-              <p className="text-xs text-muted-foreground">Из 2.5M ₽ запланированных</p>
+              <div className="text-2xl font-bold text-red-600">{rejected.length}</div>
             </CardContent>
           </Card>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Заявки сотрудников</CardTitle>
-            <CardDescription>Список заявок на согласование внешнего обучения</CardDescription>
+            <CardTitle>Лимит курсов на сотрудника</CardTitle>
+            <CardDescription>Ограничение количества курсов в текущем квартале</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="pending">
-              <TabsList className="mb-4">
-                <TabsTrigger value="pending">Ожидают (12)</TabsTrigger>
-                <TabsTrigger value="approved">Утверждены</TabsTrigger>
-                <TabsTrigger value="rejected">Отклонены</TabsTrigger>
-                <TabsTrigger value="all">Все заявки</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="pending" className="space-y-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Сотрудник</TableHead>
-                      <TableHead>Курсы</TableHead>
-                      <TableHead>Стоимость</TableHead>
-                      <TableHead>Дата</TableHead>
-                      <TableHead className="text-right">Действия</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {REQUESTS.filter(r => r.status === 'pending').map((req) => (
-                      <TableRow key={req.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage src={req.user.avatar} />
-                              <AvatarFallback>{req.user.name[0]}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="font-medium">{req.user.name}</div>
-                              <div className="text-xs text-muted-foreground">{req.user.department}</div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1">
-                            {req.courses.map(c => (
-                              <div key={c.id} className="text-sm">• {c.title}</div>
-                            ))}
-                            {req.comment && (
-                              <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                                <FileText className="h-3 w-3" />
-                                <span className="italic">"{req.comment}"</span>
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium">{req.totalCost.toLocaleString()} ₽</div>
-                        </TableCell>
-                        <TableCell>{req.date}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="outline" className="text-green-600 hover:text-green-700 hover:bg-green-50">
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50">
-                              <X className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="ghost">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TabsContent>
+            <div className="flex flex-col gap-3 md:flex-row md:items-end">
+              <div className="w-full max-w-xs space-y-2">
+                <div className="text-sm font-medium">Курсов в квартал</div>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={limitInput}
+                  disabled={isPolicyLoading || updatePolicyMutation.isPending}
+                  onChange={(e) => setLimitInput(e.target.value)}
+                />
+              </div>
+              <Button
+                className="md:w-auto"
+                disabled={isPolicyLoading || updatePolicyMutation.isPending}
+                onClick={() => {
+                  const parsed = Number(limitInput);
+                  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+                    toast({
+                      title: "Некорректное значение",
+                      description: "Укажите целое число от 1 до 100.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  updatePolicyMutation.mutate(parsed);
+                }}
+              >
+                Сохранить лимит
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
-               <TabsContent value="approved">
-                <div className="flex h-32 items-center justify-center text-muted-foreground">
-                  Здесь будет список утвержденных заявок
-                </div>
-              </TabsContent>
-            </Tabs>
+        <Card>
+          <CardHeader>
+            <CardTitle>Заявки на назначение</CardTitle>
+            <CardDescription>Утверждение перед фактическим назначением курса</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading && <div className="text-sm text-muted-foreground">Загрузка заявок...</div>}
+            {isError && (
+              <div className="text-sm text-destructive">
+                Ошибка загрузки заявок: {(error as Error).message}
+              </div>
+            )}
+            {!isLoading && !isError && (
+              <Tabs defaultValue="pending">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="pending">Ожидают ({pending.length})</TabsTrigger>
+                  <TabsTrigger value="approved">Утверждены ({approved.length})</TabsTrigger>
+                  <TabsTrigger value="rejected">Отклонены ({rejected.length})</TabsTrigger>
+                  <TabsTrigger value="all">Все ({requests.length})</TabsTrigger>
+                </TabsList>
+                <TabsContent value="pending">{renderRows(pending, true)}</TabsContent>
+                <TabsContent value="approved">{renderRows(approved, false)}</TabsContent>
+                <TabsContent value="rejected">{renderRows(rejected, false)}</TabsContent>
+                <TabsContent value="all">{renderRows(requests, false)}</TabsContent>
+              </Tabs>
+            )}
           </CardContent>
         </Card>
       </div>

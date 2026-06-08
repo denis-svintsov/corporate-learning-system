@@ -36,7 +36,7 @@ public class CourseService {
                                DifficultyLevel difficulty,
                                CourseStatus status,
                                String tagId,
-                               String specialization,
+                               String positionId,
                                Pageable pageable) {
         Specification<Course> spec = Specification.where(null);
 
@@ -70,8 +70,13 @@ public class CourseService {
             });
         }
 
-        if (specialization != null && !specialization.isBlank()) {
-            spec = spec.and((root, query, cb) -> cb.equal(cb.lower(root.get("specialization")), specialization.toLowerCase()));
+        if (positionId != null && !positionId.isBlank()) {
+            String normalized = positionId.trim().toLowerCase();
+            spec = spec.and((root, query, cb) -> {
+                var csvExpr = cb.lower(cb.coalesce(root.get("specializationsCsv"), ""));
+                var wrapped = cb.concat(cb.concat(",", csvExpr), ",");
+                return cb.like(wrapped, "%," + normalized + ",%");
+            });
         }
 
         return courseRepository.findAll(spec, pageable);
@@ -79,16 +84,16 @@ public class CourseService {
 
     @Cacheable(
             cacheNames = "courseCatalog",
-            key = "T(String).format('%s|%s|%s|%s|%s|%s|%s|%s', #q, #categoryId, #difficulty, #status, #tagId, #specialization, #pageable.pageNumber, #pageable.pageSize)"
+            key = "T(String).format('%s|%s|%s|%s|%s|%s|%s|%s', #q, #categoryId, #difficulty, #status, #tagId, #positionId, #pageable.pageNumber, #pageable.pageSize)"
     )
     public Page<CourseDto> catalogDto(String q,
                                       String categoryId,
                                       DifficultyLevel difficulty,
                                       CourseStatus status,
                                       String tagId,
-                                      String specialization,
+                                      String positionId,
                                       Pageable pageable) {
-        return catalog(q, categoryId, difficulty, status, tagId, specialization, pageable)
+        return catalog(q, categoryId, difficulty, status, tagId, positionId, pageable)
                 .map(courseMapper::toDto);
     }
 
@@ -125,11 +130,15 @@ public class CourseService {
                 .tags(tags)
                 .allowedRolesCsv(CsvUtil.join(req.allowedRoles()))
                 .allowedDepartmentIdsCsv(CsvUtil.join(req.allowedDepartmentIds()))
-                .specialization(req.specialization())
+                .specializationsCsv(CsvUtil.join(req.specializations()))
                 .instructions(req.instructions())
                 .aggregatorUrl(req.aggregatorUrl())
                 .coverUrl(req.coverUrl())
                 .companyCost(req.companyCost())
+                .partnerName(req.partnerName())
+                .partnerLocation(req.partnerLocation())
+                .startDate(req.startDate())
+                .endDate(req.endDate())
                 .build();
 
         return courseRepository.save(course);
@@ -160,20 +169,17 @@ public class CourseService {
         course.setTags(tags);
         course.setAllowedRolesCsv(CsvUtil.join(req.allowedRoles()));
         course.setAllowedDepartmentIdsCsv(CsvUtil.join(req.allowedDepartmentIds()));
-        course.setSpecialization(req.specialization());
+        course.setSpecializationsCsv(CsvUtil.join(req.specializations()));
         course.setInstructions(req.instructions());
         course.setAggregatorUrl(req.aggregatorUrl());
         course.setCoverUrl(req.coverUrl());
         course.setCompanyCost(req.companyCost());
+        course.setPartnerName(req.partnerName());
+        course.setPartnerLocation(req.partnerLocation());
+        course.setStartDate(req.startDate());
+        course.setEndDate(req.endDate());
 
         return courseRepository.save(course);
     }
 
-    @Transactional
-    @CacheEvict(cacheNames = {"courseCatalog", "courseById"}, allEntries = true)
-    public Course updateSpecialization(String id, String specialization) {
-        Course course = getById(id);
-        course.setSpecialization(specialization);
-        return courseRepository.save(course);
-    }
 }

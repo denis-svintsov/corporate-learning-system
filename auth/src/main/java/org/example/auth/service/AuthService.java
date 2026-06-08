@@ -6,11 +6,12 @@ import org.example.auth.dto.RegisterRequest;
 import org.example.auth.model.Role;
 import org.example.auth.model.User;
 import org.example.auth.repository.UserRepository;
+import org.example.auth.users.UsersServiceClient;
+import org.example.auth.users.ProvisionUserRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -22,6 +23,7 @@ public class AuthService {
     private final SessionService sessionService;
     private final LoginAttemptService loginAttemptService;
     private final SecurityPolicyService securityPolicyService;
+    private final UsersServiceClient usersServiceClient;
 
     public AuthService(
             UserRepository userRepository,
@@ -29,13 +31,15 @@ public class AuthService {
             JwtService jwtService,
             SessionService sessionService,
             LoginAttemptService loginAttemptService,
-            SecurityPolicyService securityPolicyService) {
+            SecurityPolicyService securityPolicyService,
+            UsersServiceClient usersServiceClient) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.sessionService = sessionService;
         this.loginAttemptService = loginAttemptService;
         this.securityPolicyService = securityPolicyService;
+        this.usersServiceClient = usersServiceClient;
     }
 
     @Transactional
@@ -66,19 +70,28 @@ public class AuthService {
         user.setLastName(request.getLastName());
         user.setPositionId(request.getPositionId());
         user.setDepartmentId(request.getDepartmentId());
-        user.setSpecialization(request.getSpecialization());
         user.setHireDate(request.getHireDate());
         user.setStatus("active");
         
-        Set<Role> roles = new HashSet<>();
-        roles.add(Role.USER);
-        user.setRoles(roles);
-
         user = userRepository.save(user);
 
-        Set<String> roleNames = user.getRoles().stream()
-                .map(Enum::name)
-                .collect(Collectors.toSet());
+        usersServiceClient.provisionUser(user.getId(), new ProvisionUserRequest(
+                user.getId(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getPositionId(),
+                user.getDepartmentId(),
+                user.getHireDate(),
+                user.getStatus(),
+                Set.of(Role.USER.name())
+        ));
+
+        var userContext = usersServiceClient.getUserContext(user.getId());
+        Set<String> roleNames = userContext == null || userContext.roles() == null
+                ? Set.of(Role.USER.name())
+                : userContext.roles().stream().map(String::toUpperCase).collect(Collectors.toSet());
 
         String token = jwtService.generateToken(user.getUsername(), roleNames);
 
@@ -86,9 +99,19 @@ public class AuthService {
         sessionService.createSession(user.getId(), token, ipAddress, userAgent);
 
         // Запись успешной попытки регистрации
-        loginAttemptService.recordLoginAttempt(user.getId(), user.getEmail(), ipAddress, true);
+        // Пользователь еще не закоммичен в основной транзакции, поэтому в REQUIRES_NEW
+        // нельзя ссылаться на user_id из users.users (получим FK violation).
+        loginAttemptService.recordLoginAttempt(null, user.getEmail(), ipAddress, true);
 
-        return new AuthResponse(user.getId(), token, "Bearer", user.getUsername(), user.getEmail(), user.getSpecialization(), roleNames);
+        return new AuthResponse(
+                user.getId(),
+                token,
+                "Bearer",
+                user.getUsername(),
+                user.getEmail(),
+                userContext != null ? userContext.positionId() : user.getPositionId(),
+                roleNames
+        );
     }
 
     @Transactional
@@ -135,16 +158,25 @@ public class AuthService {
             throw new RuntimeException(errorMessage);
         }
 
-        Set<String> roleNames = user.getRoles().stream()
-                .map(Enum::name)
-                .collect(Collectors.toSet());
+        var userContext = usersServiceClient.getUserContext(user.getId());
+        Set<String> roleNames = userContext == null || userContext.roles() == null
+                ? Set.of(Role.USER.name())
+                : userContext.roles().stream().map(String::toUpperCase).collect(Collectors.toSet());
 
         String token = jwtService.generateToken(user.getUsername(), roleNames);
 
         // Создание сессии
         sessionService.createSession(user.getId(), token, ipAddress, userAgent);
 
-        return new AuthResponse(user.getId(), token, "Bearer", user.getUsername(), user.getEmail(), user.getSpecialization(), roleNames);
+        return new AuthResponse(
+                user.getId(),
+                token,
+                "Bearer",
+                user.getUsername(),
+                user.getEmail(),
+                userContext != null ? userContext.positionId() : user.getPositionId(),
+                roleNames
+        );
     }
 
     @Transactional
@@ -152,17 +184,4 @@ public class AuthService {
         sessionService.invalidateSessionByToken(token);
     }
 
-    @Transactional
-    public AuthResponse updateSpecializationByUsername(String username, String specialization) {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        user.setSpecialization(specialization);
-        user = userRepository.save(user);
-        Set<String> roleNames = user.getRoles().stream()
-                .map(Enum::name)
-                .collect(Collectors.toSet());
-
-        // token не перевыпускаем, возвращаем текущую структуру профиля
-        return new AuthResponse(user.getId(), null, "Bearer", user.getUsername(), user.getEmail(), user.getSpecialization(), roleNames);
-    }
 }

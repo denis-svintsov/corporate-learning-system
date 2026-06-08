@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.math.BigDecimal;
 import java.util.HashSet;
@@ -66,10 +67,10 @@ public class Course {
     private String allowedDepartmentIdsCsv;
 
     /**
-     * Специализация (например: "Software Engineering", "Data Analytics").
+     * Целевые должности курса, хранятся в CSV (legacy column name: specialization).
      */
     @Column(name = "specialization")
-    private String specialization;
+    private String specializationsCsv;
 
     /**
      * Инструкции по прохождению курса.
@@ -94,6 +95,30 @@ public class Course {
      */
     @Column(name = "company_cost")
     private BigDecimal companyCost;
+
+    /**
+     * Партнер, на площадке которого проводится курс.
+     */
+    @Column(name = "partner_name")
+    private String partnerName;
+
+    /**
+     * Локация/площадка партнера.
+     */
+    @Column(name = "partner_location")
+    private String partnerLocation;
+
+    /**
+     * Фиксированная дата старта потока курса.
+     */
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    /**
+     * Фиксированная дата окончания потока курса.
+     */
+    @Column(name = "end_date")
+    private LocalDate endDate;
 
     @ManyToMany
     @JoinTable(

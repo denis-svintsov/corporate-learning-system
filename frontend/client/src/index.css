@@ -9,10 +9,7 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   
-  /* RZD Brand Colors */
-  /* Red: #D50000 -> 360 100% 42% */
-  /* Blue: #0055A4 -> 209 100% 32% */
-  /* Light Blue: #E3F2FD -> 208 79% 94% */
+  /* Corporate brand colors */
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -59,11 +56,11 @@
   --popover: 0 0% 100%;
   --popover-foreground: 220 15% 20%;
 
-  /* RZD Red as Primary */
+  /* Primary corporate color */
   --primary: 354 100% 42%; /* #D50000 */
   --primary-foreground: 0 0% 100%;
 
-  /* RZD Blue as Secondary */
+  /* Secondary corporate color */
   --secondary: 209 100% 32%; /* #0055A4 */
   --secondary-foreground: 0 0% 100%;
 

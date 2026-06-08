@@ -6,6 +6,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import org.example.courses.model.DifficultyLevel;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Set;
 
 public record CreateCourseRequest(
@@ -17,10 +18,14 @@ public record CreateCourseRequest(
         Set<String> tagIds,
         Set<String> allowedRoles,
         Set<String> allowedDepartmentIds,
-        String specialization,
+        Set<String> specializations,
         String instructions,
         String aggregatorUrl,
         String coverUrl,
-        @PositiveOrZero BigDecimal companyCost
+        @PositiveOrZero BigDecimal companyCost,
+        String partnerName,
+        String partnerLocation,
+        LocalDate startDate,
+        LocalDate endDate
 ) {
 }

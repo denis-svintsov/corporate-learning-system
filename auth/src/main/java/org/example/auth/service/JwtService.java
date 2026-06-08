@@ -9,8 +9,10 @@ import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class JwtService {
@@ -50,6 +52,21 @@ public class JwtService {
         return extractClaim(token, Claims::getExpiration);
     }
 
+    public Set<String> extractRoles(String token) {
+        Claims claims = extractAllClaims(token);
+        Object roles = claims.get("roles");
+        if (roles instanceof List<?> list) {
+            return list.stream()
+                    .map(String::valueOf)
+                    .map(String::toUpperCase)
+                    .collect(Collectors.toSet());
+        }
+        if (roles instanceof String value && !value.isBlank()) {
+            return Set.of(value.toUpperCase());
+        }
+        return Set.of("USER");
+    }
+
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         final Claims claims = extractAllClaims(token);
         return claimsResolver.apply(claims);
@@ -72,4 +89,3 @@ public class JwtService {
         return (tokenUsername.equals(username) && !isTokenExpired(token));
     }
 }
-
