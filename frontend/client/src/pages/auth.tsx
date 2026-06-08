@@ -51,15 +51,15 @@ export default function AuthPage() {
   const [regPositionId, setRegPositionId] = useState("");
   const [regDepartmentId, setRegDepartmentId] = useState("");
   const [regHireDate, setRegHireDate] = useState("");
-  const apiBaseUrl = import.meta.env.VITE_API_URL ?? window.location.origin;
+  const authBaseUrl = import.meta.env.VITE_AUTH_API_URL ?? `${window.location.origin}/auth`;
 
   useEffect(() => {
     // Загрузка departments и positions
     const loadData = async () => {
       try {
         const [deptRes, posRes] = await Promise.all([
-          fetch(`${apiBaseUrl}/departments`),
-          fetch(`${apiBaseUrl}/positions`),
+          fetch(`${authBaseUrl}/departments`),
+          fetch(`${authBaseUrl}/positions`),
         ]);
 
         if (deptRes.ok) {

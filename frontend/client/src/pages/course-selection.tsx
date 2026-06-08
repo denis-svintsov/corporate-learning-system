@@ -20,6 +20,7 @@ import {
   fetchRecommendedCourses,
   submitAssignmentRequest,
 } from "@/lib/coursesApi";
+import { fetchPositions } from "@/lib/usersApi";
 
 interface Position {
   positionId: string;
@@ -57,17 +58,10 @@ export default function CourseSelection() {
     queryFn: () => fetchAssignmentPolicy(),
   });
 
-  const apiBaseUrl = import.meta.env.VITE_API_URL ?? window.location.origin;
-
   const { data: positions = [] } = useQuery({
     queryKey: ["positions"],
-    queryFn: async (): Promise<Position[]> => {
-      const res = await fetch(`${apiBaseUrl}/positions`);
-      if (!res.ok) {
-        throw new Error(await extractApiErrorMessage(res, "Не удалось загрузить список должностей"));
-      }
-      return res.json();
-    },
+    queryFn: fetchPositions,
+    enabled: !!user?.id,
   });
 
   const positionTitle = useMemo(() => {

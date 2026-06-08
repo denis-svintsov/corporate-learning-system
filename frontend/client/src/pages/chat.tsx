@@ -28,6 +28,19 @@ const quickPrompts = [
   "Как открыть чат курса?",
 ];
 
+function readCourseIdFromUrl(location: string): string | null {
+  const queryIndex = location.indexOf("?");
+  const search = queryIndex >= 0
+    ? location.slice(queryIndex + 1)
+    : typeof window !== "undefined"
+      ? window.location.search.replace(/^\?/, "")
+      : "";
+  if (!search) return null;
+  const params = new URLSearchParams(search);
+  const value = params.get("courseId")?.trim();
+  return value || null;
+}
+
 function buildAssistantReply(text: string, assignedCourses: { courseId?: string | null; courseTitle?: string | null }[]) {
   const question = text.toLowerCase();
   const activeCourses = assignedCourses.filter((course) => course.courseId);
@@ -71,6 +84,7 @@ export default function Chat() {
   const { user } = useAuth();
   const [location, navigate] = useLocation();
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(ASSISTANT_ROOM_ID);
+  const [targetCourseId, setTargetCourseId] = useState<string | null>(() => readCourseIdFromUrl(location));
   const [messageText, setMessageText] = useState("");
   const [joinRequestedFor, setJoinRequestedFor] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -85,12 +99,11 @@ export default function Chat() {
     },
   ]);
 
-  const courseIdFromQuery = useMemo(() => {
-    const queryIndex = location.indexOf("?");
-    if (queryIndex < 0) return null;
-    const params = new URLSearchParams(location.slice(queryIndex + 1));
-    const value = params.get("courseId")?.trim();
-    return value ? value : null;
+  useEffect(() => {
+    const nextCourseId = readCourseIdFromUrl(location);
+    if (nextCourseId) {
+      setTargetCourseId(nextCourseId);
+    }
   }, [location]);
 
   const { data: rooms = [], isLoading: roomsLoading, isError: roomsError, error: roomsErrorValue } = useQuery({
@@ -114,7 +127,7 @@ export default function Chat() {
     () => rooms.find((room) => room.id === selectedRoomId) ?? null,
     [rooms, selectedRoomId],
   );
-  const assistantSelected = selectedRoomId === ASSISTANT_ROOM_ID && !courseIdFromQuery;
+  const assistantSelected = selectedRoomId === ASSISTANT_ROOM_ID && !targetCourseId;
 
   const roomDisplayName = (room: { type: string; courseId?: string | null; name: string }) => {
     if (room.type !== "COURSE" || !room.courseId) return room.name;
@@ -132,25 +145,30 @@ export default function Chat() {
 
   useEffect(() => {
     setJoinRequestedFor(null);
-  }, [courseIdFromQuery]);
+  }, [targetCourseId]);
 
   useEffect(() => {
-    if (!courseIdFromQuery) return;
-    setSelectedRoomId(null);
+    if (!targetCourseId) return;
 
-    const existingRoom = rooms.find((room) => room.type === "COURSE" && room.courseId === courseIdFromQuery);
+    const existingRoom = rooms.find((room) => room.type === "COURSE" && room.courseId === targetCourseId);
     if (existingRoom) {
-      setSelectedRoomId(existingRoom.id);
+      if (selectedRoomId !== existingRoom.id) {
+        setSelectedRoomId(existingRoom.id);
+      }
       return;
     }
 
-    if (roomsLoading || joinCourseMutation.isPending || joinRequestedFor === courseIdFromQuery) {
+    if (selectedRoomId === ASSISTANT_ROOM_ID) {
+      setSelectedRoomId(null);
+    }
+
+    if (roomsLoading || joinCourseMutation.isPending || joinRequestedFor === targetCourseId) {
       return;
     }
 
-    setJoinRequestedFor(courseIdFromQuery);
-    joinCourseMutation.mutate(courseIdFromQuery);
-  }, [courseIdFromQuery, joinCourseMutation, joinRequestedFor, rooms, roomsLoading]);
+    setJoinRequestedFor(targetCourseId);
+    joinCourseMutation.mutate(targetCourseId);
+  }, [targetCourseId, joinCourseMutation, joinRequestedFor, rooms, roomsLoading, selectedRoomId]);
 
   useEffect(() => {
     if (!user?.id || roomsLoading || assignedLoading || joinCourseMutation.isPending) return;
@@ -308,6 +326,7 @@ export default function Chat() {
             {syncError && <div className="p-4 text-sm text-destructive">{syncError}</div>}
             <div
               onClick={() => {
+                setTargetCourseId(null);
                 navigate("/chat");
                 setSelectedRoomId(ASSISTANT_ROOM_ID);
               }}
@@ -330,7 +349,11 @@ export default function Chat() {
             {rooms.map((room) => (
               <div
                 key={room.id}
-                onClick={() => setSelectedRoomId(room.id)}
+                onClick={() => {
+                  setTargetCourseId(null);
+                  navigate("/chat");
+                  setSelectedRoomId(room.id);
+                }}
                 className={`flex items-center gap-3 p-4 hover:bg-muted/50 cursor-pointer ${selectedRoom?.id === room.id ? "bg-muted/50" : ""}`}
               >
                 <Avatar>
@@ -364,7 +387,7 @@ export default function Chat() {
                 <p className="text-xs text-muted-foreground">
                   {assistantSelected
                     ? "Помогает ориентироваться по платформе"
-                    : courseIdFromQuery && !selectedRoom
+                    : targetCourseId && !selectedRoom
                       ? "Открываем чат курса..."
                       : `${participants.length} участника`}
                 </p>
