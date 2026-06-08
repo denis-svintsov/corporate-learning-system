@@ -51,6 +51,7 @@ public class AnalyticsService {
     private final NotificationsServiceClient notificationsClient;
     private final CourseStatRepository courseStatRepository;
     private final LearningReportRepository learningReportRepository;
+    private final ReportPdfGenerator reportPdfGenerator;
     private final ObjectMapper objectMapper;
 
     public AnalyticsService(
@@ -59,6 +60,7 @@ public class AnalyticsService {
             NotificationsServiceClient notificationsClient,
             CourseStatRepository courseStatRepository,
             LearningReportRepository learningReportRepository,
+            ReportPdfGenerator reportPdfGenerator,
             ObjectMapper objectMapper
     ) {
         this.usersClient = usersClient;
@@ -66,6 +68,7 @@ public class AnalyticsService {
         this.notificationsClient = notificationsClient;
         this.courseStatRepository = courseStatRepository;
         this.learningReportRepository = learningReportRepository;
+        this.reportPdfGenerator = reportPdfGenerator;
         this.objectMapper = objectMapper;
     }
 
@@ -121,11 +124,11 @@ public class AnalyticsService {
                 snapshot.userEngagement()
         );
         String reportType = normalize(request == null ? null : request.reportType(), "dashboard-overview");
-        String format = normalize(request == null ? null : request.format(), "json");
+        String format = normalize(request == null ? null : request.format(), "pdf");
         try {
             String json = objectMapper.writeValueAsString(payload);
             LearningReport report = learningReportRepository.save(new LearningReport(reportType, userId, format, json));
-            return toDto(report);
+            return toDto(report, resolveAuthorName(userId, new HashMap<>()));
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to serialize analytics report", ex);
         }
@@ -133,10 +136,26 @@ public class AnalyticsService {
 
     public List<LearningReportDto> reports(String rolesHeader) {
         requireAnalyticsRole(rolesHeader);
+        Map<String, String> authorNames = new HashMap<>();
         return learningReportRepository.findAll().stream()
                 .sorted(Comparator.comparing(LearningReport::getGeneratedAt).reversed())
-                .map(this::toDto)
+                .map(report -> toDto(report, resolveAuthorName(report.getGeneratedBy(), authorNames)))
                 .toList();
+    }
+
+    public ReportFile downloadReport(String reportId, String rolesHeader) {
+        requireAnalyticsRole(rolesHeader);
+        LearningReport report = learningReportRepository.findById(reportId)
+                .orElseThrow(() -> new IllegalArgumentException("Report not found: " + reportId));
+        try {
+            ReportPayload payload = objectMapper.readValue(report.getPayloadJson(), ReportPayload.class);
+            String authorName = resolveAuthorName(report.getGeneratedBy(), new HashMap<>());
+            byte[] pdf = reportPdfGenerator.generate(payload, report.getReportType(), authorName);
+            String filename = "analytics-report-" + report.getGeneratedAt().toLocalDate() + ".pdf";
+            return new ReportFile(filename, "application/pdf", pdf);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("Failed to parse analytics report", ex);
+        }
     }
 
     private AnalyticsSnapshot snapshot(String rolesHeader) {
@@ -270,20 +289,30 @@ public class AnalyticsService {
         );
     }
 
-    private LearningReportDto toDto(LearningReport report) {
+    private LearningReportDto toDto(LearningReport report, String generatedBy) {
         try {
             Map<String, Object> data = objectMapper.readValue(report.getPayloadJson(), new TypeReference<>() {});
             return new LearningReportDto(
                     report.getId(),
                     report.getReportType(),
                     report.getGeneratedAt(),
-                    report.getGeneratedBy(),
+                    generatedBy,
                     report.getFormat(),
                     data
             );
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("Failed to parse analytics report", ex);
         }
+    }
+
+    private String resolveAuthorName(String userId, Map<String, String> cache) {
+        if (userId == null || userId.isBlank()) {
+            return "-";
+        }
+        return cache.computeIfAbsent(userId, id -> usersClient.getUserById(id)
+                .map(UserProfileDto::displayName)
+                .filter(name -> !name.isBlank())
+                .orElse(id));
     }
 
     private void requireAnalyticsRole(String rolesHeader) {
@@ -353,6 +382,9 @@ public class AnalyticsService {
             List<CourseStatsDto> courseStats,
             List<UserEngagementDto> userEngagement
     ) {
+    }
+
+    public record ReportFile(String filename, String contentType, byte[] bytes) {
     }
 
     private static class CourseAccumulator {

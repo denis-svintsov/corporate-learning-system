@@ -8,6 +8,7 @@ import java.time.LocalDate;
 public record UpdateUserRequest(
         @Email String email,
         @NotBlank String firstName,
+        String middleName,
         @NotBlank String lastName,
         String positionId,
         String departmentId,

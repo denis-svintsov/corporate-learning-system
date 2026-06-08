@@ -1,6 +1,6 @@
 import { extractApiErrorMessage } from "@/lib/apiError";
 
-export type NotificationType = "COURSE_ASSIGNED" | "LESSON_COMPLETED" | "COURSE_COMPLETED" | "SYSTEM";
+export type NotificationType = "COURSE_ASSIGNED" | "ASSIGNMENT_REQUESTED" | "LESSON_COMPLETED" | "COURSE_COMPLETED" | "SYSTEM";
 export type NotificationChannel = "IN_APP" | "EMAIL" | "TELEGRAM";
 export type NotificationStatus = "UNREAD" | "READ";
 
@@ -23,7 +23,7 @@ export interface UnreadCountDto {
 }
 
 const NOTIFICATIONS_API_URL =
-  import.meta.env.VITE_NOTIFICATIONS_API_URL ?? "http://localhost:8080";
+  import.meta.env.VITE_NOTIFICATIONS_API_URL ?? window.location.origin;
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem("auth_token");
@@ -64,4 +64,9 @@ export function markAllNotificationsRead(): Promise<void> {
   return fetchJson<void>("/notifications/read-all", {
     method: "PATCH",
   });
+}
+
+export function buildNotificationStreamUrl(token: string): string {
+  const params = new URLSearchParams({ token });
+  return `${NOTIFICATIONS_API_URL}/notifications/stream?${params.toString()}`;
 }

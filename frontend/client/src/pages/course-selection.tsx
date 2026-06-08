@@ -42,6 +42,8 @@ export default function CourseSelection() {
     queryKey: ["assigned-courses", user?.id],
     queryFn: () => fetchAssignedCourses(),
     enabled: !!user?.id,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: myRequests = [] } = useQuery({
@@ -55,13 +57,12 @@ export default function CourseSelection() {
     queryFn: () => fetchAssignmentPolicy(),
   });
 
-  const authBaseUrl =
-    import.meta.env.VITE_AUTH_API_URL ?? "http://localhost:8080/auth";
+  const apiBaseUrl = import.meta.env.VITE_API_URL ?? window.location.origin;
 
   const { data: positions = [] } = useQuery({
     queryKey: ["positions"],
     queryFn: async (): Promise<Position[]> => {
-      const res = await fetch(`${authBaseUrl}/positions`);
+      const res = await fetch(`${apiBaseUrl}/positions`);
       if (!res.ok) {
         throw new Error(await extractApiErrorMessage(res, "Не удалось загрузить список должностей"));
       }
@@ -227,6 +228,13 @@ export default function CourseSelection() {
     return `${hours} ч`;
   };
 
+  const statusLabel = (status?: string | null) => {
+    if (status === "ACTIVE") return "Активен";
+    if (status === "DRAFT") return "Черновик";
+    if (status === "ARCHIVED") return "Архив";
+    return null;
+  };
+
   return (
     <Layout>
       <div className="mx-auto max-w-5xl space-y-8">
@@ -356,8 +364,9 @@ export default function CourseSelection() {
                       {course.description || "Описание пока не заполнено."}
                     </p>
                     <div className="mt-3 flex gap-2">
-                      <Badge variant="secondary" className="text-xs">{course.categoryId ?? "Без категории"}</Badge>
-                      <Badge variant="outline" className="text-xs">{course.status ?? "Статус"}</Badge>
+                      {statusLabel(course.status) && (
+                        <Badge variant="outline" className="text-xs">{statusLabel(course.status)}</Badge>
+                      )}
                       {isPending && <Badge className="text-xs bg-amber-500">На модерации</Badge>}
                     </div>
                   </div>

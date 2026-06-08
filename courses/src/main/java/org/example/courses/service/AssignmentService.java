@@ -7,6 +7,7 @@ import org.example.courses.dto.AssignmentPolicyDto;
 import org.example.courses.dto.CourseAssignmentRequest;
 import org.example.courses.dto.SubmitAssignmentRequest;
 import org.example.courses.model.AssignmentPolicy;
+import org.example.courses.kafka.AssignmentRequestedEvent;
 import org.example.courses.kafka.CourseAssignedEvent;
 import org.example.courses.kafka.EventPublisher;
 import org.example.courses.model.AssignmentRequestStatus;
@@ -77,7 +78,15 @@ public class AssignmentService {
                 .dueDate(req.dueDate())
                 .status(AssignmentRequestStatus.PENDING)
                 .build();
-        return toRequestDto(courseAssignmentRequestRepository.save(request));
+        CourseAssignmentRequestEntity saved = courseAssignmentRequestRepository.save(request);
+        eventPublisher.publishAssignmentRequested(new AssignmentRequestedEvent(
+                saved.getId(),
+                saved.getUserId(),
+                course.getId(),
+                course.getTitle(),
+                saved.getCreatedAt()
+        ));
+        return toRequestDto(saved);
     }
 
     @Transactional
@@ -151,7 +160,7 @@ public class AssignmentService {
     }
 
     @Transactional
-    public CourseAssignment confirmCompletion(String courseId, String userId, String confirmedBy) {
+    public CourseAssignment confirmCompletion(String courseId, String userId, String confirmedBy, boolean passed) {
         CourseAssignment assignment = courseAssignmentRepository.findByUserIdAndCourse_Id(userId, courseId)
                 .orElseThrow(() -> new IllegalArgumentException("Assignment not found for user and course."));
         Course course = assignment.getCourse();
@@ -161,7 +170,7 @@ public class AssignmentService {
         }
         final Course completionCourse = course;
 
-        assignment.setStatus(AssignmentStatus.COMPLETED);
+        assignment.setStatus(passed ? AssignmentStatus.COMPLETED : AssignmentStatus.FAILED);
         CourseAssignment saved = courseAssignmentRepository.save(assignment);
 
         Enrollment enrollment = enrollmentRepository
@@ -171,19 +180,23 @@ public class AssignmentService {
                         .course(completionCourse)
                         .status(EnrollmentStatus.ACTIVE)
                         .build());
-        enrollment.setStatus(EnrollmentStatus.COMPLETED);
+        enrollment.setStatus(passed ? EnrollmentStatus.COMPLETED : EnrollmentStatus.CANCELLED);
         enrollment.setCompletionDate(OffsetDateTime.now());
         enrollmentRepository.save(enrollment);
 
-        certificateService.issueIfNeeded(userId, courseId);
+        if (passed) {
+            certificateService.issueIfNeeded(userId, courseId);
+        }
 
         learningHistoryRepository.save(LearningHistory.builder()
                 .userId(userId)
-                .action("COURSE_COMPLETED_CONFIRMED")
-                .details("Завершение курса \"" + completionCourse.getTitle() + "\" подтверждено пользователем " + confirmedBy)
+                .action(passed ? "COURSE_COMPLETED_CONFIRMED" : "COURSE_FAILED_CONFIRMED")
+                .details((passed ? "Курс пройден: \"" : "Курс не пройден: \"") + completionCourse.getTitle() + "\". Решение подтвердил пользователь " + confirmedBy)
                 .build());
 
-        eventPublisher.publishCourseCompleted(new CourseCompletedEvent(userId, courseId, OffsetDateTime.now()));
+        if (passed) {
+            eventPublisher.publishCourseCompleted(new CourseCompletedEvent(userId, courseId, OffsetDateTime.now()));
+        }
         return saved;
     }
 

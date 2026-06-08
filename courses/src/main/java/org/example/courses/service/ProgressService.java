@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -28,6 +27,7 @@ public class ProgressService {
     private final UserProgressRepository userProgressRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final CourseAssignmentRepository courseAssignmentRepository;
+    private final CourseAttendanceRepository attendanceRepository;
     private final LearningHistoryRepository learningHistoryRepository;
     private final CertificateService certificateService;
     private final EventPublisher eventPublisher;
@@ -36,6 +36,13 @@ public class ProgressService {
         List<UserProgress> progresses = userProgressRepository.findByUserId(userId);
         Map<String, List<UserProgress>> byCourse = progresses.stream()
                 .collect(Collectors.groupingBy(p -> p.getCourse().getId()));
+        Map<String, Set<LocalDate>> presentDatesByCourse = attendanceRepository
+                .findByUserIdAndStatus(userId, AttendanceStatus.PRESENT)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        CourseAttendance::getCourseId,
+                        Collectors.mapping(CourseAttendance::getAttendanceDate, Collectors.toSet())
+                ));
 
         List<UserCourseProgressDto> courseDtos = new ArrayList<>();
         for (Map.Entry<String, List<UserProgress>> e : byCourse.entrySet()) {
@@ -46,7 +53,7 @@ public class ProgressService {
             int total = lessonRepository.findByModuleCourseId(courseId).size();
             int completed = (int) e.getValue().stream().filter(p -> p.getStatus() == ProgressStatus.COMPLETED).count();
             int lessonPercent = total == 0 ? 0 : (int) Math.round(100.0 * completed / total);
-            int percent = Math.max(lessonPercent, dateBasedProgress(course));
+            int percent = Math.max(lessonPercent, activeProgress(course, presentDatesByCourse.get(courseId)));
             courseDtos.add(new UserCourseProgressDto(courseId, course.getTitle(), completed, total, percent));
         }
 
@@ -59,7 +66,7 @@ public class ProgressService {
             int total = lessonRepository.findByModuleCourseId(courseId).size();
             int percent = switch (en.getStatus()) {
                 case COMPLETED -> 100;
-                case ACTIVE -> dateBasedProgress(en.getCourse());
+                case ACTIVE -> activeProgress(en.getCourse(), presentDatesByCourse.get(courseId));
                 default -> 0;
             };
             courseDtos.add(new UserCourseProgressDto(courseId, en.getCourse().getTitle(), 0, total, percent));
@@ -69,22 +76,40 @@ public class ProgressService {
         return new ProgressSummaryDto(userId, courseDtos);
     }
 
-    private int dateBasedProgress(Course course) {
+    private int activeProgress(Course course, Collection<LocalDate> presentDates) {
+        return Math.max(10, attendanceBasedProgress(course, presentDates));
+    }
+
+    private int attendanceBasedProgress(Course course, Collection<LocalDate> presentDates) {
+        if (presentDates == null || presentDates.isEmpty()) {
+            return 0;
+        }
+        long attendedDays = presentDates.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
+        if (attendedDays == 0) {
+            return 0;
+        }
+
+        long totalDays = courseDurationDays(course);
+        if (totalDays <= 0) {
+            return 50;
+        }
+        long countedDays = Math.min(attendedDays, totalDays);
+        return (int) Math.min(100, Math.round(100.0 * countedDays / totalDays));
+    }
+
+    private long courseDurationDays(Course course) {
         if (course == null || course.getStartDate() == null || course.getEndDate() == null) {
             return 0;
         }
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
         LocalDate start = course.getStartDate();
         LocalDate end = course.getEndDate();
-        if (today.isBefore(start)) {
+        if (end.isBefore(start)) {
             return 0;
         }
-        if (today.isAfter(end)) {
-            return 100;
-        }
-        long totalDays = Math.max(1, ChronoUnit.DAYS.between(start, end) + 1);
-        long elapsedDays = Math.max(1, ChronoUnit.DAYS.between(start, today) + 1);
-        return (int) Math.min(100, Math.round(100.0 * elapsedDays / totalDays));
+        return Math.max(1, ChronoUnit.DAYS.between(start, end) + 1);
     }
 
     public ProgressSummaryDto getUserProgress(String userId) {
@@ -110,6 +135,16 @@ public class ProgressService {
                 .collect(Collectors.groupingBy(UserProgress::getUserId));
         Map<String, List<Enrollment>> enrollmentsByUser = enrollmentRepository.findByUserIdIn(distinctUserIds).stream()
                 .collect(Collectors.groupingBy(Enrollment::getUserId));
+        Map<String, Map<String, Set<LocalDate>>> presentDatesByUserAndCourse = attendanceRepository
+                .findByUserIdInAndStatus(distinctUserIds, AttendanceStatus.PRESENT)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        CourseAttendance::getUserId,
+                        Collectors.groupingBy(
+                                CourseAttendance::getCourseId,
+                                Collectors.mapping(CourseAttendance::getAttendanceDate, Collectors.toSet())
+                        )
+                ));
 
         Set<String> courseIds = new HashSet<>();
         progressByUser.values().stream()
@@ -138,6 +173,7 @@ public class ProgressService {
                         userId,
                         progressByUser.getOrDefault(userId, List.of()),
                         enrollmentsByUser.getOrDefault(userId, List.of()),
+                        presentDatesByUserAndCourse.getOrDefault(userId, Map.of()),
                         coursesById,
                         lessonCountsByCourse
                 ))
@@ -148,6 +184,7 @@ public class ProgressService {
             String userId,
             List<UserProgress> progresses,
             List<Enrollment> enrollments,
+            Map<String, Set<LocalDate>> presentDatesByCourse,
             Map<String, Course> coursesById,
             Map<String, Integer> lessonCountsByCourse
     ) {
@@ -165,7 +202,7 @@ public class ProgressService {
                     .filter(progress -> progress.getStatus() == ProgressStatus.COMPLETED)
                     .count();
             int lessonPercent = total == 0 ? 0 : (int) Math.round(100.0 * completed / total);
-            int percent = Math.max(lessonPercent, dateBasedProgress(course));
+            int percent = Math.max(lessonPercent, activeProgress(course, presentDatesByCourse.get(courseId)));
             courseDtos.add(new UserCourseProgressDto(courseId, course.getTitle(), completed, total, percent));
         }
 
@@ -177,7 +214,7 @@ public class ProgressService {
             int total = lessonCountsByCourse.getOrDefault(courseId, 0);
             int percent = switch (enrollment.getStatus()) {
                 case COMPLETED -> 100;
-                case ACTIVE -> dateBasedProgress(course);
+                case ACTIVE -> activeProgress(course, presentDatesByCourse.get(courseId));
                 default -> 0;
             };
             courseDtos.add(new UserCourseProgressDto(courseId, course.getTitle(), 0, total, percent));

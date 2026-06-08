@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
 import { fetchAssignedCourses } from "@/lib/coursesApi";
 import { fetchUserProfile } from "@/lib/usersApi";
+import { formatFullName } from "@/lib/userName";
 
 const ASSISTANT_ROOM_ID = "chat-bot";
 
@@ -113,7 +114,7 @@ export default function Chat() {
     () => rooms.find((room) => room.id === selectedRoomId) ?? null,
     [rooms, selectedRoomId],
   );
-  const assistantSelected = selectedRoomId === ASSISTANT_ROOM_ID;
+  const assistantSelected = selectedRoomId === ASSISTANT_ROOM_ID && !courseIdFromQuery;
 
   const roomDisplayName = (room: { type: string; courseId?: string | null; name: string }) => {
     if (room.type !== "COURSE" || !room.courseId) return room.name;
@@ -135,6 +136,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (!courseIdFromQuery) return;
+    setSelectedRoomId(null);
 
     const existingRoom = rooms.find((room) => room.type === "COURSE" && room.courseId === courseIdFromQuery);
     if (existingRoom) {
@@ -218,8 +220,7 @@ export default function Chat() {
       const settled = await Promise.allSettled(
         participantIds.map(async (id) => {
           const profile = await fetchUserProfile(id);
-          const fullName = [profile.lastName, profile.firstName].filter(Boolean).join(" ").trim();
-          return [id, fullName || profile.email || id] as const;
+          return [id, formatFullName(profile)] as const;
         }),
       );
       const map = new Map<string, string>();
@@ -306,7 +307,10 @@ export default function Chat() {
             )}
             {syncError && <div className="p-4 text-sm text-destructive">{syncError}</div>}
             <div
-              onClick={() => setSelectedRoomId(ASSISTANT_ROOM_ID)}
+              onClick={() => {
+                navigate("/chat");
+                setSelectedRoomId(ASSISTANT_ROOM_ID);
+              }}
               className={`flex items-center gap-3 p-4 hover:bg-muted/50 cursor-pointer ${assistantSelected ? "bg-muted/50" : ""}`}
             >
               <Avatar>
@@ -358,7 +362,11 @@ export default function Chat() {
               <div>
                 <h3 className="font-semibold">{assistantSelected ? "Чат-бот платформы" : selectedRoom ? roomDisplayName(selectedRoom) : "Чат не выбран"}</h3>
                 <p className="text-xs text-muted-foreground">
-                  {assistantSelected ? "Помогает ориентироваться по платформе" : `${participants.length} участника`}
+                  {assistantSelected
+                    ? "Помогает ориентироваться по платформе"
+                    : courseIdFromQuery && !selectedRoom
+                      ? "Открываем чат курса..."
+                      : `${participants.length} участника`}
                 </p>
               </div>
             </div>

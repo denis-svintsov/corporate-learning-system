@@ -4,9 +4,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Component
@@ -34,6 +36,20 @@ public class UsersServiceClient {
         return result == null ? List.of() : result;
     }
 
+    public Optional<UserProfileDto> getUserById(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.ofNullable(restClient.get()
+                    .uri("/users/{id}", userId)
+                    .retrieve()
+                    .body(UserProfileDto.class));
+        } catch (RestClientException ex) {
+            return Optional.empty();
+        }
+    }
+
     public record DepartmentDto(
             String departmentId,
             String name,
@@ -47,6 +63,7 @@ public class UsersServiceClient {
             String id,
             String email,
             String firstName,
+            String middleName,
             String lastName,
             String positionId,
             String positionTitle,
@@ -59,7 +76,8 @@ public class UsersServiceClient {
         public String displayName() {
             String name = String.join(" ",
                     lastName == null ? "" : lastName,
-                    firstName == null ? "" : firstName).trim();
+                    firstName == null ? "" : firstName,
+                    middleName == null ? "" : middleName).trim();
             return name.isBlank() ? email : name;
         }
     }

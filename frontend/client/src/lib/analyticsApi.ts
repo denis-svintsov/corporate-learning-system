@@ -67,7 +67,7 @@ export interface AnalyticsDashboardDto {
 }
 
 const ANALYTICS_API_URL =
-  import.meta.env.VITE_ANALYTICS_API_URL ?? "http://localhost:8080";
+  import.meta.env.VITE_ANALYTICS_API_URL ?? window.location.origin;
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem("auth_token");
@@ -124,9 +124,30 @@ export function fetchAnalyticsReports(): Promise<LearningReportDto[]> {
   return fetchJson<LearningReportDto[]>("/analytics/reports");
 }
 
-export function generateAnalyticsReport(payload = { reportType: "dashboard-overview", format: "json" }): Promise<LearningReportDto> {
+export function generateAnalyticsReport(payload = { reportType: "dashboard-overview", format: "pdf" }): Promise<LearningReportDto> {
   return fetchJson<LearningReportDto>("/analytics/reports/generate", {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function downloadAnalyticsReport(reportId: string): Promise<void> {
+  const token = localStorage.getItem("auth_token");
+  const headers = new Headers();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  const res = await fetch(`${ANALYTICS_API_URL}/analytics/reports/${reportId}/download`, { headers });
+  if (!res.ok) {
+    throw new Error(await extractApiErrorMessage(res));
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `analytics-report-${reportId}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }

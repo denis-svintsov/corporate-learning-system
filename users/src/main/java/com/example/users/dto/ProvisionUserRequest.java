@@ -8,6 +8,7 @@ public record ProvisionUserRequest(
         String username,
         String email,
         String firstName,
+        String middleName,
         String lastName,
         String positionId,
         String departmentId,

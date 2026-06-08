@@ -16,6 +16,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+function difficultyLabel(difficulty?: string | null) {
+  if (difficulty === "BEGINNER") return "Начальный";
+  if (difficulty === "INTERMEDIATE") return "Средний";
+  if (difficulty === "ADVANCED") return "Продвинутый";
+  return null;
+}
+
 export function Header() {
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
@@ -34,7 +41,7 @@ export function Header() {
     queryKey: ["notifications-unread-count"],
     queryFn: fetchUnreadNotificationsCount,
     enabled: !!user?.id,
-    refetchInterval: 10000,
+    refetchInterval: 60000,
     refetchOnWindowFocus: true,
   });
 
@@ -101,7 +108,7 @@ export function Header() {
                     >
                       <div className="truncate text-sm font-medium">{course.title}</div>
                       <div className="truncate text-xs text-muted-foreground">
-                        {course.description || course.difficulty || "Курс"}
+                        {course.description || difficultyLabel(course.difficulty) || "Курс"}
                       </div>
                     </button>
                   ))}

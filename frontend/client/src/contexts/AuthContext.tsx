@@ -25,6 +25,7 @@ interface RegisterData {
   email: string;
   password: string;
   firstName: string;
+  middleName?: string;
   lastName: string;
   positionId?: string;
   departmentId?: string;
@@ -33,7 +34,7 @@ interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL ?? "http://localhost:8080/auth";
+const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL ?? `${window.location.origin}/auth`;
 const TOKEN_KEY = "auth_token";
 const USER_KEY = "auth_user";
 

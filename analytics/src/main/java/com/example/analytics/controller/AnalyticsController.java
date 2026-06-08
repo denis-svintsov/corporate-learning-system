@@ -9,7 +9,10 @@ import com.example.analytics.dto.AnalyticsDtos.LearningReportDto;
 import com.example.analytics.dto.AnalyticsDtos.NotificationEffectivenessDto;
 import com.example.analytics.dto.AnalyticsDtos.UserEngagementDto;
 import com.example.analytics.service.AnalyticsService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -84,5 +87,17 @@ public class AnalyticsController {
             @RequestHeader(name = "X-User-Roles", required = false) String rolesHeader
     ) {
         return analyticsService.reports(rolesHeader);
+    }
+
+    @GetMapping("/reports/{id}/download")
+    public ResponseEntity<byte[]> downloadReport(
+            @PathVariable String id,
+            @RequestHeader(name = "X-User-Roles", required = false) String rolesHeader
+    ) {
+        AnalyticsService.ReportFile report = analyticsService.downloadReport(id, rolesHeader);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, report.contentType())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + report.filename() + "\"")
+                .body(report.bytes());
     }
 }

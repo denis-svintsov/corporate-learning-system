@@ -73,6 +73,13 @@ public class Course {
     private String specializationsCsv;
 
     /**
+     * Эксперты, назначенные на ведение курса. Хранится как CSV user_id.
+     * Если null/пусто — экспертам курс недоступен, но ADMIN/HR/TECHNOLOG видят его.
+     */
+    @Column(name = "expert_ids_csv")
+    private String expertIdsCsv;
+
+    /**
      * Инструкции по прохождению курса.
      */
     @Column(name = "instructions", columnDefinition = "text")

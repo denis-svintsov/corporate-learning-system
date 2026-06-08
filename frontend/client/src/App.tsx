@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { NotificationStream } from "@/components/NotificationStream";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import CoursesCatalog from "@/pages/courses-catalog";
@@ -123,6 +124,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
+          <NotificationStream />
           <Toaster />
           <Router />
         </TooltipProvider>

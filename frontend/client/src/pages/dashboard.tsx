@@ -66,6 +66,21 @@ export default function Dashboard() {
   const isActiveAssignmentStatus = (status?: string | null) =>
     status === "ASSIGNED" || status === "IN_PROGRESS";
 
+  const assignmentStatusLabel = (status?: string | null) => {
+    if (status === "COMPLETED") return "Завершен";
+    if (status === "FAILED") return "Не пройден";
+    if (status === "IN_PROGRESS") return "В процессе";
+    if (status === "OVERDUE") return "Просрочен";
+    return "Назначен";
+  };
+
+  const assignmentProgress = (status?: string | null) => {
+    if (status === "COMPLETED") return 100;
+    if (status === "IN_PROGRESS") return 50;
+    if (status === "ASSIGNED") return 10;
+    return 0;
+  };
+
   const selectedCountByAssignments = assignedCourses.filter((c) => isActiveAssignmentStatus(c.status) && isInCurrentQuarter(c.createdAt)).length
     + assignedCourses.filter((c) => {
       if (!isActiveAssignmentStatus(c.status)) return false;
@@ -237,15 +252,15 @@ export default function Dashboard() {
                     </div>
                     <h3 className="font-bold text-lg leading-tight mb-2">{nearestCourse.courseTitle ?? "Без названия"}</h3>
                     <p className="text-sm text-muted-foreground line-clamp-2">
-                      Статус назначения: {nearestCourse.status ?? "ASSIGNED"}
+                      Статус назначения: {assignmentStatusLabel(nearestCourse.status)}
                     </p>
                   </div>
                   <div className="pt-2">
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span>Прогресс подготовки</span>
-                      <span className="font-medium">{nearestCourse.status === "COMPLETED" ? 100 : nearestCourse.status === "IN_PROGRESS" ? 50 : 10}%</span>
+                      <span className="font-medium">{assignmentProgress(nearestCourse.status)}%</span>
                     </div>
-                    <Progress value={nearestCourse.status === "COMPLETED" ? 100 : nearestCourse.status === "IN_PROGRESS" ? 50 : 10} className="h-2" />
+                    <Progress value={assignmentProgress(nearestCourse.status)} className="h-2" />
                   </div>
                   <Button className="w-full mt-4" asChild>
                     <Link href={`/course/${nearestCourse.courseId}`}>

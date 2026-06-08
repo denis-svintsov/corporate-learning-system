@@ -23,6 +23,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final NotificationDeliveryStatRepository deliveryStatRepository;
+    private final NotificationStreamService streamService;
 
     public List<NotificationDto> findMy(String userId) {
         return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
@@ -49,7 +50,9 @@ public class NotificationService {
                 .build();
         Notification saved = notificationRepository.save(notification);
         incrementSent(saved.getType(), saved.getChannel());
-        return toDto(saved);
+        NotificationDto dto = toDto(saved);
+        streamService.publish(dto);
+        return dto;
     }
 
     @Transactional

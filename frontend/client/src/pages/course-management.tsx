@@ -28,7 +28,8 @@ import {
   updateCourse,
   uploadCourseCover,
 } from "@/lib/coursesApi";
-import { DepartmentDto, PositionDto, fetchDepartments, fetchPositions } from "@/lib/usersApi";
+import { DepartmentDto, PositionDto, UserProfileDto, fetchDepartments, fetchPositions, fetchUsersByDepartment } from "@/lib/usersApi";
+import { formatFullName } from "@/lib/userName";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, Check, ChevronsUpDown, Edit, ImageUp, Plus, Save, Search, X } from "lucide-react";
 import { ReactNode, useMemo, useState } from "react";
@@ -89,6 +90,7 @@ const emptyForm = {
   allowedRoles: ["USER"] as string[],
   allowedDepartmentIds: [] as string[],
   specializations: [] as string[],
+  expertIds: [] as string[],
   instructions: "",
   aggregatorUrl: "",
   coverUrl: "",
@@ -117,6 +119,7 @@ function toForm(course: CourseDto): CourseFormState {
     allowedRoles: course.allowedRoles ?? ["USER"],
     allowedDepartmentIds: course.allowedDepartmentIds ?? [],
     specializations: course.specializations ?? [],
+    expertIds: course.expertIds ?? [],
     instructions: course.instructions ?? "",
     aggregatorUrl: course.aggregatorUrl ?? "",
     coverUrl: course.coverUrl ?? "",
@@ -138,6 +141,7 @@ function toPayload(form: CourseFormState): CoursePayload & { status: CourseStatu
     allowedRoles: form.allowedRoles,
     allowedDepartmentIds: form.allowedDepartmentIds,
     specializations: form.specializations,
+    expertIds: form.expertIds,
     instructions: form.instructions.trim() || null,
     aggregatorUrl: form.aggregatorUrl.trim() || null,
     coverUrl: form.coverUrl.trim() || null,
@@ -291,6 +295,22 @@ export default function CourseManagementPage() {
     enabled: canEditCourses,
   });
 
+  const expertsQuery = useQuery({
+    queryKey: ["course-experts", departmentsQuery.data?.map((department) => department.departmentId).join(",")],
+    queryFn: async () => {
+      const departments = departmentsQuery.data ?? [];
+      const users = await Promise.all(departments.map((department) => fetchUsersByDepartment(department.departmentId)));
+      const unique = new Map<string, UserProfileDto>();
+      users.flat().forEach((profile) => {
+        if ((profile.roles ?? []).includes("EXPERT")) {
+          unique.set(profile.id, profile);
+        }
+      });
+      return Array.from(unique.values());
+    },
+    enabled: canEditCourses && (departmentsQuery.data?.length ?? 0) > 0,
+  });
+
   const positionOptions: Option[] = useMemo(
     () => (positionsQuery.data ?? []).map((position: PositionDto) => ({
       value: position.positionId,
@@ -307,6 +327,15 @@ export default function CourseManagementPage() {
       description: department.description,
     })),
     [departmentsQuery.data],
+  );
+
+  const expertOptions: Option[] = useMemo(
+    () => (expertsQuery.data ?? []).map((expert) => ({
+      value: expert.id,
+      label: formatFullName(expert),
+      description: expert.positionTitle || expert.email,
+    })),
+    [expertsQuery.data],
   );
 
   const courses = useMemo(() => {
@@ -527,6 +556,16 @@ export default function CourseManagementPage() {
                     placeholder="Все подразделения"
                     emptyText="Подразделения не найдены"
                     onChange={(value) => setField("allowedDepartmentIds", value)}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <MultiCombobox
+                    label="Эксперты курса"
+                    options={expertOptions}
+                    selected={form.expertIds}
+                    placeholder="Выберите экспертов"
+                    emptyText="Эксперты не найдены"
+                    onChange={(value) => setField("expertIds", value)}
                   />
                 </div>
 

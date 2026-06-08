@@ -9,7 +9,11 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     List<User> findByDepartmentId(String departmentId);
 
-    List<User> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(String firstName, String lastName);
+    List<User> findByFirstNameContainingIgnoreCaseOrMiddleNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(
+            String firstName,
+            String middleName,
+            String lastName
+    );
 
     List<User> findByStatusIgnoreCase(String status);
 }

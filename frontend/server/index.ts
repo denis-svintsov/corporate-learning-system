@@ -1,16 +1,83 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
-import { createServer } from "http";
+import { createServer, request as httpRequest } from "http";
+import { request as httpsRequest } from "https";
 
 const app = express();
 const httpServer = createServer(app);
+const gatewayUrl =
+  process.env.GATEWAY_URL ??
+  (process.env.NODE_ENV === "production"
+    ? "http://gateway:8080"
+    : "http://localhost:8080");
+
+const gatewayPrefixes = [
+  "/auth",
+  "/users",
+  "/departments",
+  "/positions",
+  "/courses",
+  "/progress",
+  "/lessons",
+  "/certificates",
+  "/chat",
+  "/notifications",
+  "/analytics",
+];
 
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;
   }
 }
+
+function proxyGateway(req: Request, res: Response) {
+  const target = new URL(req.originalUrl, gatewayUrl);
+  const proxyRequest = target.protocol === "https:" ? httpsRequest : httpRequest;
+  const headers = { ...req.headers };
+  delete headers.host;
+
+  const forwarded = proxyRequest(
+    target,
+    {
+      method: req.method,
+      headers,
+    },
+    (proxyRes) => {
+      res.status(proxyRes.statusCode ?? 502);
+      Object.entries(proxyRes.headers).forEach(([key, value]) => {
+        if (value !== undefined) {
+          res.setHeader(key, value);
+        }
+      });
+      proxyRes.pipe(res);
+    },
+  );
+
+  forwarded.on("error", (error) => {
+    if (!res.headersSent) {
+      res.status(502).json({ message: `Gateway недоступен: ${error.message}` });
+    } else {
+      res.end();
+    }
+  });
+
+  req.pipe(forwarded);
+}
+
+app.use((req, res, next) => {
+  const shouldProxy = gatewayPrefixes.some(
+    (prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`),
+  );
+
+  if (shouldProxy) {
+    proxyGateway(req, res);
+    return;
+  }
+
+  next();
+});
 
 app.use(
   express.json({

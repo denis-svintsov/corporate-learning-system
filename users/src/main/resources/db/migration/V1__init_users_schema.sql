@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users.users (
     username VARCHAR(255),
     email VARCHAR(255),
     first_name VARCHAR(255),
+    middle_name VARCHAR(255),
     last_name VARCHAR(255),
     position_id VARCHAR(36),
     department_id VARCHAR(36),

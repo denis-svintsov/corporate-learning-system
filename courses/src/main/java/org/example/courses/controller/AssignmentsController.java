@@ -8,11 +8,13 @@ import org.example.courses.dto.AssignmentPolicyDto;
 import org.example.courses.dto.ConfirmCourseCompletionRequest;
 import org.example.courses.dto.CourseAssignmentDto;
 import org.example.courses.dto.CourseAssignmentRequest;
+import org.example.courses.dto.CourseDto;
 import org.example.courses.dto.SubmitAssignmentRequest;
 import org.example.courses.dto.UpdateAssignmentPolicyRequest;
 import org.example.courses.model.AssignmentRequestStatus;
 import org.example.courses.model.CourseAssignment;
 import org.example.courses.service.AssignmentService;
+import org.example.courses.service.CourseService;
 import org.example.courses.util.CsvUtil;
 import org.example.courses.util.SecurityHeaders;
 import org.springframework.http.HttpStatus;
@@ -29,6 +31,7 @@ import java.util.stream.Collectors;
 public class AssignmentsController {
 
     private final AssignmentService assignmentService;
+    private final CourseService courseService;
 
     /**
      * POST /courses/assign (по ТЗ)
@@ -158,10 +161,13 @@ public class AssignmentsController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing X-User-Id");
         }
         Set<String> roles = SecurityHeaders.parseRoles(rolesHeader);
-        if (!SecurityHeaders.hasAnyRole(roles, "ADMIN", "HR", "TECHNOLOG", "EXPERT")) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
-        }
-        CourseAssignment assignment = assignmentService.confirmCompletion(courseId, request.userId(), reviewerId);
+        requireCompletionAccess(courseId, reviewerId, roles);
+        CourseAssignment assignment = assignmentService.confirmCompletion(
+                courseId,
+                request.userId(),
+                reviewerId,
+                request.passed() == null || request.passed()
+        );
         return toDto(assignment);
     }
 
@@ -228,6 +234,19 @@ public class AssignmentsController {
     private void requireAdminOrHr(Set<String> roles) {
         if (!roles.contains("ADMIN") && !roles.contains("HR")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied (HR/Admin only)");
+        }
+    }
+
+    private void requireCompletionAccess(String courseId, String userId, Set<String> roles) {
+        if (SecurityHeaders.hasAnyRole(roles, "ADMIN", "HR", "TECHNOLOG")) {
+            return;
+        }
+        if (!roles.contains("EXPERT")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        CourseDto course = courseService.getDtoById(courseId);
+        if (!course.expertIds().contains(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Expert is not assigned to this course");
         }
     }
 }

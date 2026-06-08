@@ -122,6 +122,8 @@ export default function CalendarPage() {
     queryKey: ["calendar-assigned-courses", user?.id],
     queryFn: () => fetchAssignedCourses(),
     enabled: !!user?.id,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const events = useMemo(() => buildScheduleEvents(assignedCourses), [assignedCourses]);

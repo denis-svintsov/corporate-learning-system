@@ -20,6 +20,7 @@ public record CourseDto(
         Set<String> allowedRoles,
         Set<String> allowedDepartmentIds,
         Set<String> specializations,
+        Set<String> expertIds,
         String instructions,
         String aggregatorUrl,
         String coverUrl,

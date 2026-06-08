@@ -39,6 +39,7 @@ function assignmentLabel(status?: string | null) {
   if (status === "ASSIGNED") return "Назначен";
   if (status === "IN_PROGRESS") return "В процессе";
   if (status === "COMPLETED") return "Завершен";
+  if (status === "FAILED") return "Не пройден";
   if (status === "OVERDUE") return "Просрочен";
   return status;
 }
@@ -47,8 +48,23 @@ function assignmentProgress(status?: string | null) {
   if (status === "COMPLETED") return 100;
   if (status === "IN_PROGRESS") return 50;
   if (status === "ASSIGNED") return 10;
+  if (status === "FAILED") return 0;
   if (status === "OVERDUE") return 0;
   return 0;
+}
+
+function courseStatusLabel(status?: string | null) {
+  if (status === "ACTIVE") return "Активен";
+  if (status === "DRAFT") return "Черновик";
+  if (status === "ARCHIVED") return "Архив";
+  return "Статус не указан";
+}
+
+function difficultyLabel(difficulty?: string | null) {
+  if (difficulty === "BEGINNER") return "Начальный";
+  if (difficulty === "INTERMEDIATE") return "Средний";
+  if (difficulty === "ADVANCED") return "Продвинутый";
+  return "Сложность не указана";
 }
 
 export default function CourseDetail() {
@@ -69,12 +85,16 @@ export default function CourseDetail() {
     queryKey: ["assigned-courses", user?.id],
     queryFn: () => fetchAssignedCourses(),
     enabled: !!user?.id,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: progressData } = useQuery({
     queryKey: ["progress", user?.id],
     queryFn: () => fetchMyProgress(user!.id),
     enabled: !!user?.id,
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const assignment = assignedCourses.find((a) => a.courseId === courseId);
@@ -104,8 +124,8 @@ export default function CourseDetail() {
     ? `${Math.round((course.durationMinutes / 60) * 10) / 10} ч`
     : "-";
 
-  const progress = progressData?.courses.find((c) => c.courseId === courseId)?.progressPercentage
-    ?? assignmentProgress(assignment?.status);
+  const calculatedProgress = progressData?.courses.find((c) => c.courseId === courseId)?.progressPercentage ?? 0;
+  const progress = Math.max(calculatedProgress, assignmentProgress(assignment?.status));
   const isStarted = progress > 0 || assignment?.status === "IN_PROGRESS" || assignment?.status === "COMPLETED";
   const isCompleted = progress >= 100 || assignment?.status === "COMPLETED";
   const calendarDate = formatCalendarDate(assignment?.dueDate ?? course.startDate ?? course.endDate);
@@ -127,8 +147,8 @@ export default function CourseDetail() {
           />
           <div className="p-6 space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{course.status ?? "ACTIVE"}</Badge>
-              <Badge variant="outline">{course.difficulty ?? "-"}</Badge>
+              <Badge variant="secondary">{courseStatusLabel(course.status)}</Badge>
+              <Badge variant="outline">{difficultyLabel(course.difficulty)}</Badge>
               <Badge variant="outline">{durationLabel}</Badge>
               <Badge variant="outline">{assignmentLabel(assignment?.status)}</Badge>
             </div>
@@ -273,12 +293,8 @@ export default function CourseDetail() {
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Категория</span>
-                  <span>{course.categoryId ?? "-"}</span>
-                </div>
-                <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Сложность</span>
-                  <span>{course.difficulty ?? "-"}</span>
+                  <span>{difficultyLabel(course.difficulty)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Длительность</span>

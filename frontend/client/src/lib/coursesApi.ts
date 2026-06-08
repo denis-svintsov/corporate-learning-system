@@ -15,6 +15,7 @@ export interface CourseDto {
   allowedRoles?: string[];
   allowedDepartmentIds?: string[];
   specializations?: string[];
+  expertIds?: string[];
   instructions?: string | null;
   aggregatorUrl?: string | null;
   coverUrl?: string | null;
@@ -33,6 +34,9 @@ export interface CourseParticipantDto {
   assignmentStatus?: string | null;
   dueDate?: string | null;
   assignedAt?: string | null;
+  presentDays?: number;
+  totalCourseDays?: number;
+  attendancePercentage?: number;
 }
 
 export interface AttendanceDto {
@@ -57,6 +61,7 @@ export type CoursePayload = {
   allowedRoles?: string[];
   allowedDepartmentIds?: string[];
   specializations?: string[];
+  expertIds?: string[];
   instructions?: string | null;
   aggregatorUrl?: string | null;
   coverUrl?: string | null;
@@ -143,7 +148,7 @@ export interface AssignmentPolicyDto {
 }
 
 const COURSES_API_URL =
-  import.meta.env.VITE_COURSES_API_URL ?? "http://localhost:8080";
+  import.meta.env.VITE_COURSES_API_URL ?? window.location.origin;
 
 function buildUrl(path: string, params?: Record<string, string | number | undefined | null>) {
   const url = new URL(path, COURSES_API_URL);
@@ -269,11 +274,11 @@ export async function markCourseAttendance(courseId: string, request: {
   });
 }
 
-export async function confirmCourseCompletion(courseId: string, userId: string): Promise<AssignedCourseDto> {
+export async function confirmCourseCompletion(courseId: string, userId: string, passed = true): Promise<AssignedCourseDto> {
   return fetchJson<AssignedCourseDto>(buildUrl(`/courses/${courseId}/complete`), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({ userId, passed }),
   });
 }
 

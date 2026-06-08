@@ -7,6 +7,7 @@ public record UserProfileDto(
         String id,
         String email,
         String firstName,
+        String middleName,
         String lastName,
         String positionId,
         String positionTitle,
