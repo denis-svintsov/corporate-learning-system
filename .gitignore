@@ -1,3 +1,92 @@
-/courses/.gradle/
-/frontend/node_modules/
-/courses/build/
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.yaml
+application-local.properties
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+frontend/client/dist/
+frontend/.vite/
+frontend/node_modules/typescript/tsbuildinfo
+*.tsbuildinfo
+
+# Java / Gradle
+.gradle/
+**/.gradle/
+build/
+**/build/
+out/
+**/out/
+!**/src/main/**/build/
+!**/src/test/**/build/
+!**/src/main/**/out/
+!**/src/test/**/out/
+!**/gradle/wrapper/gradle-wrapper.jar
+
+# IDE build metadata
+.classpath
+.project
+.settings/
+.factorypath
+.apt_generated/
+.springBeans
+.sts4-cache/
+bin/
+**/bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+nbproject/private/
+nbbuild/
+nbdist/
+.nb-gradle/
+
+# Docker / local volumes
+kafka-data/
+postgres_data/
+minio_data/
+redis-data/
+docker-data/
+
+# Runtime / temp files
+tmp/
+temp/
+.cache/
+.parcel-cache/
+coverage/
+
+# Generated archives and binaries
+*.class
+*.jar
+*.war
+*.ear
+*.pid
+
+# Local generated documents
+*.tmp
+~$*
