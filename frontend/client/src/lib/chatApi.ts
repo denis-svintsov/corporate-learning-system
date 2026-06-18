@@ -29,6 +29,12 @@ export interface ChatParticipantDto {
   online: boolean;
 }
 
+export interface AssistantMessageResponse {
+  answer: string;
+  source: "faq" | "ollama" | "fallback" | string;
+  suggestions: string[];
+}
+
 const CHAT_API_URL = import.meta.env.VITE_COMMUNICATION_API_URL ?? window.location.origin;
 
 function getStoredUserId(): string | null {
@@ -89,5 +95,12 @@ export function fetchRoomParticipants(roomId: string): Promise<ChatParticipantDt
 export function joinCourseRoom(courseId: string): Promise<ChatRoomDto> {
   return fetchJson<ChatRoomDto>(`${CHAT_API_URL}/chat/rooms/course/${courseId}/join`, {
     method: "POST",
+  });
+}
+
+export function sendAssistantMessage(content: string): Promise<AssistantMessageResponse> {
+  return fetchJson<AssistantMessageResponse>(`${CHAT_API_URL}/chat/assistant/messages`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
   });
 }

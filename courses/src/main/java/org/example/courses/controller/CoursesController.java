@@ -66,10 +66,11 @@ public class CoursesController {
             return pageResult;
         }
 
-        // Упрощённая фильтрация "после выборки" — корректнее делать это через join/spec,
-        // но для MVP так быстрее.
         List<CourseDto> filtered = pageResult.getContent().stream()
-                .filter(c -> accessControlService.canAccessCourse(userId, c.allowedRoles(), c.allowedDepartmentIds()))
+                .filter(
+                        c ->
+                                accessControlService.canAccessCourse(userId, c.allowedRoles(), c.allowedDepartmentIds())
+                )
                 .collect(Collectors.toList());
 
         return new PageImpl<>(filtered, pageable, filtered.size());

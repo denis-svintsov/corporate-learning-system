@@ -10,6 +10,21 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchAssignedCourses, fetchAssignmentPolicy, fetchMyCertificates, fetchMyProgress } from "@/lib/coursesApi";
 import { useMemo } from "react";
 
+function parseDateOnly(value?: string | null): Date | null {
+  if (!value) return null;
+  const [datePart] = value.split("T");
+  const parts = datePart.split("-").map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  const [year, month, day] = parts;
+  const date = new Date(year, month - 1, day, 0, 0, 0, 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const { data: progressData } = useQuery({
@@ -94,31 +109,32 @@ export default function Dashboard() {
   const certificatesCount = certificates?.length ?? 0;
 
   const nearestCourse = useMemo(() => {
-    const now = new Date();
+    const today = startOfToday();
     const withStartDate = assignedCourses
       .filter((c) => !!c.courseStartDate && !!c.courseId)
-      .map((c) => ({ ...c, start: new Date(c.courseStartDate as string) }))
-      .filter((c) => !Number.isNaN(c.start.getTime()) && c.start >= now)
-      .sort((a, b) => a.start.getTime() - b.start.getTime());
+      .map((c) => ({ ...c, start: parseDateOnly(c.courseStartDate) }))
+      .filter((c) => c.start != null && c.start >= today)
+      .sort((a, b) => a.start!.getTime() - b.start!.getTime());
     if (withStartDate.length > 0) {
       return withStartDate[0];
     }
 
     const withDueDate = assignedCourses
       .filter((c) => !!c.dueDate && !!c.courseId)
-      .map((c) => ({ ...c, due: new Date(c.dueDate as string) }))
-      .filter((c) => !Number.isNaN(c.due.getTime()) && c.due >= now)
-      .sort((a, b) => a.due.getTime() - b.due.getTime());
+      .map((c) => ({ ...c, due: parseDateOnly(c.dueDate) }))
+      .filter((c) => c.due != null && c.due >= today)
+      .sort((a, b) => a.due!.getTime() - b.due!.getTime());
     return withDueDate[0] ?? null;
   }, [assignedCourses]);
 
   const daysToNearest = useMemo(() => {
     const nearestDateRaw = nearestCourse?.courseStartDate ?? nearestCourse?.dueDate;
     if (!nearestDateRaw) return null;
-    const due = new Date(nearestDateRaw);
-    const now = new Date();
+    const due = parseDateOnly(nearestDateRaw);
+    if (!due) return null;
+    const today = startOfToday();
     const msPerDay = 1000 * 60 * 60 * 24;
-    return Math.max(0, Math.ceil((due.getTime() - now.getTime()) / msPerDay));
+    return Math.max(0, Math.ceil((due.getTime() - today.getTime()) / msPerDay));
   }, [nearestCourse]);
   
   return (

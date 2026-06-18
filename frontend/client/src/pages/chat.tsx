@@ -2,9 +2,9 @@ import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Bot, Compass, GraduationCap, MoreVertical, Paperclip, Send, Sparkles } from "lucide-react";
+import { Bot, Compass, FileText, GraduationCap, Send, Sparkles } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchChatRooms, fetchRoomMessages, fetchRoomParticipants, joinCourseRoom, sendRoomMessage } from "@/lib/chatApi";
+import { fetchChatRooms, fetchRoomMessages, fetchRoomParticipants, joinCourseRoom, sendAssistantMessage as sendAssistantPrompt, sendRoomMessage } from "@/lib/chatApi";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
@@ -41,44 +41,6 @@ function readCourseIdFromUrl(location: string): string | null {
   return value || null;
 }
 
-function buildAssistantReply(text: string, assignedCourses: { courseId?: string | null; courseTitle?: string | null }[]) {
-  const question = text.toLowerCase();
-  const activeCourses = assignedCourses.filter((course) => course.courseId);
-
-  if (question.includes("курс") || question.includes("обуч")) {
-    if (activeCourses.length === 0) {
-      return "Назначенные курсы находятся в разделе «Назначенные курсы». Сейчас список курсов не загрузился или пока пуст. Можно также открыть «Мой выбор» и отправить заявку на интересующий курс.";
-    }
-    const courseList = activeCourses
-      .slice(0, 3)
-      .map((course, index) => `${index + 1}. ${course.courseTitle ?? "Курс без названия"}`)
-      .join("\n");
-    return `Ваши курсы доступны в разделе «Назначенные курсы». Сейчас у вас есть:\n${courseList}\n\nЧтобы перейти к материалам, откройте карточку курса и нажмите «Подробнее».`;
-  }
-
-  if (question.includes("прогресс") || question.includes("процент") || question.includes("результ")) {
-    return "Прогресс по обучению находится в личном кабинете: «Кабинет» -> «Прогресс». Там отображаются завершенные уроки, общий процент прохождения и состояние курсов.";
-  }
-
-  if (question.includes("сертифик")) {
-    return "Сертификаты доступны в разделе «Сертификаты» в левом меню. После завершения курса там появится запись, а файл можно скачать кнопкой на карточке сертификата.";
-  }
-
-  if (question.includes("чат") || question.includes("сообщ") || question.includes("куратор")) {
-    return "В списке слева находятся чаты по назначенным курсам. Выберите нужный курс, напишите сообщение в поле снизу и отправьте его. Если чат курса еще не появился, система автоматически синхронизирует его с назначенными курсами.";
-  }
-
-  if (question.includes("заяв") || question.includes("выбор") || question.includes("соглас")) {
-    return "Для самостоятельного выбора курса откройте раздел «Мой выбор». Там можно найти курс и отправить заявку на согласование. Статус заявки отображается во вкладке «На согласовании» в назначенных курсах.";
-  }
-
-  if (question.includes("распис") || question.includes("календар") || question.includes("дедлайн")) {
-    return "Даты обучения и дедлайны удобнее смотреть в разделе «Расписание». По отдельному курсу сроки также отображаются на странице курса.";
-  }
-
-  return "Я могу помочь с навигацией по платформе: найти назначенные курсы, подсказать где смотреть прогресс, сертификаты, расписание, заявки и чаты с кураторами. Напишите, что хотите сделать, например: «где мой сертификат?» или «как открыть курс?».";
-}
-
 export default function Chat() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -90,6 +52,7 @@ export default function Chat() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [syncInProgress, setSyncInProgress] = useState(false);
   const [syncAttemptedCourseIds, setSyncAttemptedCourseIds] = useState<string[]>([]);
+  const [assistantSuggestions, setAssistantSuggestions] = useState<string[]>(quickPrompts);
   const [assistantMessages, setAssistantMessages] = useState<AssistantMessage[]>([
     {
       id: "assistant-welcome",
@@ -270,12 +233,46 @@ export default function Chat() {
     },
   });
 
+  const assistantMutation = useMutation({
+    mutationFn: async (content: string) => {
+      return await sendAssistantPrompt(content);
+    },
+    onSuccess: (response) => {
+      const now = new Date();
+      if (response.suggestions?.length) {
+        setAssistantSuggestions(response.suggestions);
+      }
+      setAssistantMessages((current) => [
+        ...current,
+        {
+          id: `assistant-reply-${now.getTime()}`,
+          role: "assistant",
+          content: response.answer,
+          timestamp: now,
+        },
+      ]);
+    },
+    onError: (error) => {
+      const now = new Date();
+      setAssistantMessages((current) => [
+        ...current,
+        {
+          id: `assistant-error-${now.getTime()}`,
+          role: "assistant",
+          content: error instanceof Error
+            ? `Не удалось получить ответ ассистента: ${error.message}`
+            : "Не удалось получить ответ ассистента. Попробуйте еще раз.",
+          timestamp: now,
+        },
+      ]);
+    },
+  });
+
   const sendAssistantMessage = (content: string) => {
     const trimmed = content.trim();
-    if (!trimmed) return;
+    if (!trimmed || assistantMutation.isPending) return;
 
     const now = new Date();
-    const reply = buildAssistantReply(trimmed, assignedCourses);
     setAssistantMessages((current) => [
       ...current,
       {
@@ -284,14 +281,9 @@ export default function Chat() {
         content: trimmed,
         timestamp: now,
       },
-      {
-        id: `assistant-reply-${now.getTime()}`,
-        role: "assistant",
-        content: reply,
-        timestamp: new Date(now.getTime() + 300),
-      },
     ]);
     setMessageText("");
+    assistantMutation.mutate(trimmed);
   };
 
   const handleSend = () => {
@@ -393,9 +385,6 @@ export default function Chat() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button>
-            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -415,13 +404,13 @@ export default function Chat() {
                     Мой выбор
                   </Button>
                   <Button variant="outline" className="justify-start gap-2" onClick={() => navigate("/certificates")}>
-                    <Paperclip className="h-4 w-4" />
+                    <FileText className="h-4 w-4" />
                     Сертификаты
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {quickPrompts.map((prompt) => (
-                    <Button key={prompt} variant="secondary" size="sm" onClick={() => sendAssistantMessage(prompt)}>
+                  {assistantSuggestions.map((prompt) => (
+                    <Button key={prompt} variant="secondary" size="sm" disabled={assistantMutation.isPending} onClick={() => sendAssistantMessage(prompt)}>
                       {prompt}
                     </Button>
                   ))}
@@ -447,6 +436,16 @@ export default function Chat() {
                     </div>
                   );
                 })}
+                {assistantMutation.isPending && (
+                  <div className="flex gap-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback><Bot className="h-4 w-4" /></AvatarFallback>
+                    </Avatar>
+                    <div className="bg-muted rounded-lg p-3 text-sm text-muted-foreground">
+                      Готовлю ответ...
+                    </div>
+                  </div>
+                )}
               </>
             )}
             {!assistantSelected && messagesLoading && <div className="text-sm text-muted-foreground">Загрузка сообщений...</div>}
@@ -477,7 +476,6 @@ export default function Chat() {
           </div>
 
           <div className="p-4 border-t flex gap-2">
-            <Button variant="ghost" size="icon"><Paperclip className="h-4 w-4" /></Button>
             <Input
               placeholder="Напишите сообщение..."
               className="flex-1"
@@ -491,7 +489,7 @@ export default function Chat() {
               }}
               disabled={!assistantSelected && !selectedRoom}
             />
-            <Button size="icon" disabled={(!assistantSelected && !selectedRoom) || !messageText.trim() || sendMutation.isPending} onClick={handleSend}>
+            <Button size="icon" disabled={(!assistantSelected && !selectedRoom) || !messageText.trim() || (assistantSelected ? assistantMutation.isPending : sendMutation.isPending)} onClick={handleSend}>
               <Send className="h-4 w-4" />
             </Button>
           </div>
