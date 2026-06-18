@@ -32,7 +32,8 @@ public class CourseEventsListener {
                     event.userId(),
                     NotificationType.COURSE_ASSIGNED,
                     "Назначен новый курс",
-                    "Вам назначен курс. Откройте раздел назначенных курсов, чтобы начать обучение.",
+                    "Вам назначен курс. Откройте раздел " +
+                            "назначенных курсов, чтобы начать обучение.",
                     "courses",
                     event.courseId()
             ));

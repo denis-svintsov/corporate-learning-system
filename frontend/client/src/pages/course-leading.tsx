@@ -3,6 +3,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -68,6 +78,7 @@ export default function CourseLeadingPage() {
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<AttendanceStatus>("PRESENT");
   const [resultDrafts, setResultDrafts] = useState<Record<string, "PASSED" | "FAILED">>({});
+  const [completionTargets, setCompletionTargets] = useState<CourseParticipantDto[]>([]);
 
   const canLeadCourses = (user?.roles ?? []).some((role) =>
     ["ADMIN", "HR", "TECHNOLOG", "EXPERT"].includes(role),
@@ -156,6 +167,8 @@ export default function CourseLeadingPage() {
   const selectedParticipantSet = useMemo(() => new Set(selectedParticipantIds), [selectedParticipantIds]);
   const allParticipantIds = useMemo(() => participants.map((participant) => participant.userId), [participants]);
   const allParticipantsSelected = allParticipantIds.length > 0 && selectedParticipantIds.length === allParticipantIds.length;
+  const completionPassedCount = completionTargets.filter((participant) => resultDrafts[participant.userId] !== "FAILED").length;
+  const completionFailedCount = completionTargets.length - completionPassedCount;
 
   const toggleParticipant = (userId: string, checked: boolean) => {
     setSelectedParticipantIds((prev) => {
@@ -263,7 +276,7 @@ export default function CourseLeadingPage() {
     },
   });
 
-  const handleConfirmCompletion = () => {
+  const openCompletionDialog = () => {
     const targetParticipants = participants.filter(
       (participant) =>
         selectedParticipantSet.has(participant.userId) &&
@@ -278,15 +291,12 @@ export default function CourseLeadingPage() {
       });
       return;
     }
-    const courseTitle = selectedCourse?.title ?? "курс";
-    const passedCount = targetParticipants.filter((participant) => resultDrafts[participant.userId] !== "FAILED").length;
-    const failedCount = targetParticipants.length - passedCount;
-    const confirmed = window.confirm(
-      `Сохранить итог курса "${courseTitle}" для выбранных участников (${targetParticipants.length})?\n\nПройдут курс: ${passedCount}\nНе пройдут курс: ${failedCount}\n\nСертификаты будут созданы только тем, кто прошел курс.`,
-    );
-    if (confirmed) {
-      completionMutation.mutate(targetParticipants);
-    }
+    setCompletionTargets(targetParticipants);
+  };
+
+  const confirmCompletion = () => {
+    completionMutation.mutate(completionTargets);
+    setCompletionTargets([]);
   };
 
   if (!canLeadCourses) {
@@ -417,7 +427,7 @@ export default function CourseLeadingPage() {
                 <Button
                   variant="secondary"
                   disabled={!isFinalCourseDay || completionMutation.isPending || selectedParticipantIds.length === 0}
-                  onClick={handleConfirmCompletion}
+                  onClick={openCompletionDialog}
                 >
                   Сохранить итог выбранных
                 </Button>
@@ -543,6 +553,56 @@ export default function CourseLeadingPage() {
           </Card>
         </div>
       </div>
+      <AlertDialog open={completionTargets.length > 0} onOpenChange={(open) => !open && setCompletionTargets([])}>
+        <AlertDialogContent className="max-w-xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Подтвердить итог курса</AlertDialogTitle>
+            <AlertDialogDescription>
+              Проверьте результат перед сохранением. После подтверждения участникам со статусом "прошел" будет выдан сертификат.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-md border bg-muted/30 p-4">
+              <div className="text-sm text-muted-foreground">Курс</div>
+              <div className="mt-1 font-medium">{selectedCourse?.title ?? "Курс"}</div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-md border p-3">
+                <div className="text-2xl font-semibold">{completionTargets.length}</div>
+                <div className="text-sm text-muted-foreground">участников</div>
+              </div>
+              <div className="rounded-md border border-green-200 bg-green-50 p-3 text-green-700">
+                <div className="text-2xl font-semibold">{completionPassedCount}</div>
+                <div className="text-sm">пройдут курс</div>
+              </div>
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-red-700">
+                <div className="text-2xl font-semibold">{completionFailedCount}</div>
+                <div className="text-sm">не пройдут</div>
+              </div>
+            </div>
+            <div className="max-h-48 overflow-y-auto rounded-md border">
+              {completionTargets.map((participant) => {
+                const passed = resultDrafts[participant.userId] !== "FAILED";
+                return (
+                  <div key={participant.userId} className="flex items-center justify-between border-b px-4 py-3 last:border-b-0">
+                    <div>
+                      <div className="font-medium">{participantNames.get(participant.userId) ?? participant.userId}</div>
+                      <div className="text-xs text-muted-foreground">Посещаемость {participant.attendancePercentage ?? 0}%</div>
+                    </div>
+                    <Badge variant={passed ? "secondary" : "destructive"}>{passed ? "Пройдет" : "Не пройдет"}</Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={completionMutation.isPending}>Отмена</AlertDialogCancel>
+            <AlertDialogAction disabled={completionMutation.isPending} onClick={confirmCompletion}>
+              Сохранить итог
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }

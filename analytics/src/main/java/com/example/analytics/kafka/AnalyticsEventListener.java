@@ -10,8 +10,10 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 @Component
 public class AnalyticsEventListener {
@@ -108,10 +110,29 @@ public class AnalyticsEventListener {
     }
 
     private LocalDate eventDate(JsonNode node) {
-        String timestamp = text(node, "timestamp");
-        if (timestamp == null) {
+        JsonNode value = node.get("timestamp");
+        if (value == null || value.isNull()) {
             return LocalDate.now();
         }
-        return OffsetDateTime.parse(timestamp).toLocalDate();
+        try {
+            if (value.isNumber()) {
+                double raw = value.asDouble();
+                long epochMillis = raw < 10_000_000_000L ? Math.round(raw * 1000) : Math.round(raw);
+                return Instant.ofEpochMilli(epochMillis).atOffset(ZoneOffset.UTC).toLocalDate();
+            }
+
+            String timestamp = value.asText();
+            if (timestamp == null || timestamp.isBlank()) {
+                return LocalDate.now();
+            }
+            if (timestamp.matches("^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$")) {
+                double raw = Double.parseDouble(timestamp);
+                long epochMillis = raw < 10_000_000_000L ? Math.round(raw * 1000) : Math.round(raw);
+                return Instant.ofEpochMilli(epochMillis).atOffset(ZoneOffset.UTC).toLocalDate();
+            }
+            return OffsetDateTime.parse(timestamp).toLocalDate();
+        } catch (Exception ex) {
+            return LocalDate.now();
+        }
     }
 }

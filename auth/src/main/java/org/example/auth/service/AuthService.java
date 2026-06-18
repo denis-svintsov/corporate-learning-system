@@ -133,7 +133,8 @@ public class AuthService {
             // Записываем попытку даже при блокировке аккаунта
             loginAttemptService.recordLoginAttempt(user.getId(), user.getEmail(), ipAddress, false);
             int remainingMinutes = 15; // Время блокировки
-            throw new RuntimeException("Account is temporarily locked due to too many failed login attempts. Please try again in " + remainingMinutes + " minutes.");
+            throw new RuntimeException("Account is temporarily locked due to too many failed login attempts. Please try again in "
+                    + remainingMinutes + " minutes.");
         }
 
         boolean success = user != null && passwordEncoder.matches(request.getPassword(), user.getPassword());

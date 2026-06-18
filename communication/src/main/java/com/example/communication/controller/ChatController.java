@@ -1,12 +1,17 @@
 package com.example.communication.controller;
 
+import com.example.communication.dto.AssistantMessageRequest;
+import com.example.communication.dto.AssistantMessageResponse;
 import com.example.communication.dto.ChatParticipantDto;
 import com.example.communication.dto.ChatRoomDto;
 import com.example.communication.dto.CreateChatRoomRequest;
 import com.example.communication.dto.CreateMessageRequest;
 import com.example.communication.dto.MessageDto;
+import com.example.communication.service.AssistantService;
 import com.example.communication.service.ChatService;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -28,12 +34,15 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/chat")
 public class ChatController {
+    private static final Logger log = LoggerFactory.getLogger(ChatController.class);
 
     private final ChatService chatService;
+    private final AssistantService assistantService;
     private final SimpMessagingTemplate messagingTemplate;
 
-    public ChatController(ChatService chatService, SimpMessagingTemplate messagingTemplate) {
+    public ChatController(ChatService chatService, AssistantService assistantService, SimpMessagingTemplate messagingTemplate) {
         this.chatService = chatService;
+        this.assistantService = assistantService;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -90,6 +99,20 @@ public class ChatController {
             @RequestHeader(name = "X-User-Id", required = false) String userId
     ) {
         return chatService.getParticipants(requiredUserId(userId), roomId);
+    }
+
+    @PostMapping("/assistant/messages")
+    public AssistantMessageResponse assistantMessage(
+            @RequestHeader(name = "X-User-Id", required = false) String userId,
+            @Valid @RequestBody AssistantMessageRequest request
+    ) {
+        String resolvedUserId = requiredUserId(userId);
+        long startedAt = System.nanoTime();
+        AssistantMessageResponse response = assistantService.answer(resolvedUserId, request.content());
+        long durationMs = Duration.ofNanos(System.nanoTime() - startedAt).toMillis();
+        log.info("assistant answer userId={} source={} durationMs={} contentLength={}",
+                resolvedUserId, response.source(), durationMs, request.content().length());
+        return response;
     }
 
     private String requiredUserId(String userId) {
